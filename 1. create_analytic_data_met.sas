@@ -26,7 +26,7 @@ if (find(drug_start, 'M')>0 or find(drug_start,'B')>0 or find(drug_start,'S')>0)
 	and dt_start>='1jan2010'd and drug_start ne 'BUP';
 *BUP indicates buprenophine monotherapy=> need to exclude;
 format dt_end_lag date9.;
-run;* 234791;
+run;
 
 proc freq data=epi;
 table drug_start; run;*B, BS, M, MB, MBS, MS, S;
@@ -43,16 +43,7 @@ on a.studyid_rev = b.studyid_rev
    and a.dt2 >= b.dt_start 
    and a.dt2 <= b.dt_end
 order by b.studyid_rev, b.episode, a.dt2;
-quit;/*JM: I'd suggest to include following var from der.days_b: drug, predrug.
-Those var can be used to determine if other oat meds were co-prescribed (e.g. MB) 
-or bup monotherapy (i.e. BUP) was used (not extended bup).
-You may want to impose the condition of drug='B' and predrug='B' later in "analytic_prev_b" dataset, 
-so that the dose adjustment is only due to missing days of bnx 
-(and nothing to do with tx switch or co-prescription).
-Note that the var predrug indicates OAT types in the previous day of OAT episode. 
-predrug could be determined during the gap time of bnx (if other type of OAT was used).
-e.g. predrug for the second B dispensation of B->M->B would be M and 
-days_b dataset dosen't include the dispensed days for M between B*/
+quit;
 
 
 data epi_b;
@@ -103,21 +94,8 @@ data epi_b;
    if myepisode > 0 and first.myepisode;
 run;
 
-/*
-Created this data set for BNX
-*/
 
-/**first date of opioid dispensation (other than OAT/PSS);*/
-
-/*proc sql;*/
-/*create table tmplib.prior_po as*/
-/*select studyid_rev as studyid_rev, min(dt2) format=date9. as first_po*/
-/*from der.opioid_rx_days*/
-/*group by studyid_rev;*/
-/*quit;*/
-
-/****************
-*********************************
+/**************************************************
 	Outcome
 ***************************************************/
 *the first date of overdose-related acute care
@@ -252,14 +230,6 @@ f_dt_oop=min(msp_f_dt, nacrs_f_dt,dad_f_dt, pnet_f_dt, mdy(12,31,year));
 format f_dt_oop date9.;
 run;
 
-/*proc sql;*/
-/*create table oop_cohort as*/
-/*select w.studyid_rev, w.episode, w.myepisode, time0, dt_end, end_fu_dt,*/
-/*	min(i.f_dt_oop) format=date9. as f_dt_oop*/
-/*from cohort as w left join oop as i*/
-/*on w.studyid_rev=i.studyid_rev and year(w.time0)<=year(f_dt_oop)<=year(end_fu_dt)*/
-/*group by w.studyid_rev, w.episode, w.myepisode, time0, dt_end, end_fu_dt;*/
-/*quit;*/
 
 proc sql;
   create table oop_cohort as select w.studyid_rev, w.episode, w.myepisode, w.time0, w.dt_end, w.end_fu_dt,
@@ -711,44 +681,6 @@ data TT_analytic_m;
 run;
 
 
-/*data TT_analytic_m;*/
-/*	set TT_analytic_m;*/
-/*	by studyid_rev episode myepisode;*/
-/*	s_discont = 1;*/
-/*    *end_date = '31DEC2022'd ;  /*JM: use end_fu_dt instead*/*/
-/*    *format end_date date9.;*/
-/*	if rev_dod ne . and rev_dod <= dt_end_gap then s_discont = 0; /*JM: what about the gap time after dt_end?*/
-/*	please see my code "3.0. TT_weekly from oat initiation to end of fu.sas" how I defind dt_end_gap*/*/
-/*	else if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < dt_end_gap then s_discont = 0;*/
-/* */
-/*	if s_discont = 0 then t_discont = min(rev_dod, f_dt_oop)-time0;*/
-/*	else if s_discont = 1 then t_discont = dt_end_gap-time0;  /* Added out of province date*/*/
-/**/
-/**/
-/*	if f_od_acute_dt = . then s_od_acute = 0;*/
-/*	else if f_od_acute_dt ne . then s_od_acute = 1;/*JM: type: f_od_acute_dt (not f_od_acute)*/*/
-/*	else if rev_dod ne . and rev_dod < f_od_acute_dt then s_od_acute = 0;*/
-/*	else if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < f_od_acute_dt then s_od_acute = 0;*/
-/*	*else s_od_acute = 1; /*JM: Do you need this condition? this includes f_od_acute >= end_date*/*/
-/**/
-/*	if s_od_acute = 0 then t_od_acute = min(rev_dod, f_dt_oop, dt_end_gap)- time0;*/
-/*	else if s_od_acute = 1 then t_od_acute = f_od_acute_dt-time0;  /* Added out of province date*/*/
-/**/
-/*	if f_acute_dt = . then s_all_acute = 0;*/
-/*	else if f_acute_dt ne . then s_all_acute = 1;/*JM: type: f_od_acute_dt (not f_od_acute)*/*/
-/*	else if rev_dod ne . and rev_dod < f_acute_dt then s_all_acute = 0;*/
-/*	else if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < f_acute_dt then s_all_acute = 0;*/
-/*	*else s_od_acute = 1; /*JM: Do you need this condition? this includes f_od_acute >= end_date*/*/
-/**/
-/*	if s_all_acute = 0 then t_all_acute = min(rev_dod, f_dt_oop, dt_end_gap)- time0;*/
-/*	else if s_all_acute = 1 then t_all_acute = f_acute_dt-time0;  /* Added out of province date*/*/
-/**/
-/*run;*/;
-
-
-
-/* JM2: Here is my edit:*/
-
 data TT_analytic_m;
 set TT_analytic_m;
 by studyid_rev episode myepisode;
@@ -931,76 +863,6 @@ data tmplib1.TT_analytic_all_m; set tmplib1.TT_analytic_all_m;
 run;
 
 
-
-
-data data_m;
-set tmplib1.TT_analytic_all_m;
-by studyid_rev episode myepisode;
-where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "M" and predrug in ("M", "") and ddose_rev ne .;
-if trial_gap <= 14;
-run;
-
-data tmplib1.TT_analytic_rprev_m;
-set data_m;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data tmplib1.TT_analytic_rprev_nw_m;
-set data_m;
- if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data data_m1;
-set tmplib1.TT_analytic_all_m;
-by studyid_rev episode;
-where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "M" and predrug in ("M", "") and ddose_rev ne .;
-if first.episode and trial_gap <= 14;
-run;
-
-data tmplib1.TT_analytic_prev_m;
-set data_m1;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data tmplib1.TT_analytic_prev_nw_m;
-set data_m1;
- if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data tmplib1.TT_analytic_incid_m;
-set tmplib1.TT_analytic_prev_m;
-if episode = 1;
-run;
-
-
-data tmplib1.TT_analytic_incid_nw_m;
-set tmplib1.TT_analytic_prev_nw_m;
-if episode = 1;
-run;
-
-
-
-proc freq data=tmplib1.TT_analytic_incid_m;
- table trial_cat; run;
-
-
-
-
-proc means data=tmplib1.TT_analytic_incid_m;
- var t_od_acute2 t_discont2 t_od_acute t_discont time_od_acute time_discont;
- run;
-
-
- /*
- Data merging for sensitivity analysis 
- */
- 
-
-
 data maint_2wkdts_ed;
     set der.maint_2wkdts;
 	rename ddose = main_ddose;
@@ -1059,11 +921,6 @@ where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "M" 
 if trial_gap <= 14;
 run;
 
-data tmplib1.TT_analytic_rprev_sens_m;
-set data_ms;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
 
 data tmplib1.TT_analytic_rprev_sens_nw_m;
 set data_ms;
@@ -1100,13 +957,6 @@ if t_od_death >= 365 then sens_od_death = 0;
 run;
 
 
-
-data tmplib1.TT_analytic_prev_sens_m;
-set data_m1s;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
 data tmplib1.TT_analytic_prev_sens_nw_m;
 set data_m1s;
  if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
@@ -1117,15 +967,5 @@ data tmplib1.TT_analytic_incid_sens_nw_m;
 set tmplib1.TT_analytic_prev_sens_m;
 if episode = 1;
 run;
-
- 
-proc freq data=tmplib1.TT_analytic_incid_sens_nw_m;
-  table trial_cat;
- run;
-
-proc freq data=tmplib1.TT_analytic_incid_nw_m;
-  table trial_cat;
- run;
-
 
  
