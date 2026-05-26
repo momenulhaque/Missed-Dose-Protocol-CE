@@ -74,6 +74,105 @@ ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.
 }
 
 
+#    LASSO PS MODEL — memory-efficient, handles sparsity, variable selection
+#    Recommended for STRATIFIED analyses with small n and near-positivity
+#    Works for multinomial exposure
+#    Reference: Tibshrani (JRSS-B, 1996)
+
+ps_model_lasso <- function(dat, exposure = "trt",
+                           trunc_low  = 0.01, trunc_high = 0.99,
+                           out_vars, clust_vars,
+                           baselinevars,
+                           continuous_vars = c("ddose_prev", "year", "ret_length"),
+                           alpha = 1,      # 1 = LASSO, 0 = ridge, 0.5 = elastic net
+                           nfolds = 5) {   # cross-validation folds
+  
+  library(dplyr)
+  library(glmnet)
+  
+  # Prepare data
+  model_data <- dat %>%
+    dplyr::select(all_of(c(out_vars, clust_vars, exposure, baselinevars))) %>%
+    mutate(across(all_of(setdiff(baselinevars, continuous_vars)), as.factor)) %>%
+    filter(if_all(all_of(c(exposure, baselinevars)), ~ !is.na(.)))
+  
+  valid_baselinevars <- baselinevars[
+    sapply(model_data[baselinevars], function(x) length(unique(x)) > 1)
+  ]
+  formula_ps <- as.formula(paste(exposure, "~", paste(valid_baselinevars, collapse = " + ")))
+  
+  model_data[[exposure]] <- as.factor(model_data[[exposure]])
+  levels_exp <- levels(model_data[[exposure]])
+  
+  # Prepare design matrix (glmnet requires matrix input)
+  X <- model.matrix(formula_ps, data = model_data)[, -1]  # remove intercept
+  y <- model_data[[exposure]]
+  
+  cat(sprintf("Fitting LASSO multinomial (alpha=%.1f, %d-fold CV)...\n", alpha, nfolds))
+  
+  # Fit with cross-validation
+  cv_fit <- cv.glmnet(
+    x = X,
+    y = y,
+    family = "multinomial",
+    alpha = alpha,
+    nfolds = nfolds,
+    type.measure = "deviance"
+  )
+  
+  # Predict at lambda.min (or lambda.1se for more shrinkage)
+  ps_probs <- predict(cv_fit, newx = X, s = "lambda.min", type = "response")
+  ps_probs <- ps_probs[, , 1]  # Extract the probability matrix
+  
+  # Ensure column names match exposure levels
+  if (ncol(ps_probs) != length(levels_exp)) {
+    stop("LASSO output dimensions don't match exposure levels.")
+  }
+  colnames(ps_probs) <- levels_exp
+  
+  # Bound probabilities
+  ps_probs <- apply(ps_probs, 2, function(x) pmin(pmax(x, 1e-6), 1 - 1e-6))
+  ps_probs <- ps_probs / rowSums(ps_probs)  # renormalize
+  
+  # Compute weights (same as ps_model_wt)
+  marginal_probs <- prop.table(table(model_data[[exposure]]))
+  obs_exposure   <- model_data[[exposure]]
+  
+  model_data$ps <- mapply(function(i, trt) ps_probs[i, trt],
+                          i = seq_along(obs_exposure), trt = obs_exposure)
+  model_data$stab_numerator <- marginal_probs[as.character(obs_exposure)]
+  model_data$wt_stab        <- as.numeric(model_data$stab_numerator / model_data$ps)
+  
+  # Truncated stabilised IPTW
+  p_low  <- quantile(model_data$wt_stab, trunc_low)
+  p_high <- quantile(model_data$wt_stab, trunc_high)
+  model_data$wt_trunc <- pmin(pmax(model_data$wt_stab, p_low), p_high)
+  
+  # Truncated PS
+  p_low  <- quantile(model_data$ps, trunc_low)
+  p_high <- quantile(model_data$ps, trunc_high)
+  model_data$ps_trunc <- pmin(pmax(model_data$ps, p_low), p_high)
+  
+  # Truncated PS probabilities (for OW)
+  ps_probs_trunc <- apply(ps_probs, 2, function(x)
+    pmin(pmax(x, quantile(x, trunc_low)), quantile(x, trunc_high)))
+  
+  # Overlap weights
+  tilting_fn       <- apply(ps_probs,       1, function(x) sum(1 / x))
+  tilting_fn_trunc <- apply(ps_probs_trunc, 1, function(x) sum(1 / x))
+  
+  model_data$ow_wt       <- as.numeric(1 / (tilting_fn       * model_data$ps))
+  model_data$ow_wt_trunc <- as.numeric(1 / (tilting_fn_trunc * model_data$ps_trunc))
+  
+  return(list(
+    model = cv_fit,
+    data_weights = model_data,
+    lambda_min = cv_fit$lambda.min
+  ))
+}
+
+
+
 
 make_table1 <- function(ps_rds, bvars, cont_vars, clustered = FALSE) {
   

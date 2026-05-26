@@ -150,6 +150,11 @@ ps_tr2_first <- ps_model_wt(
 
 saveRDS(ps_tr2_first, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"))
 
+
+
+
+
+
 ## MET 3-4 days: all-interruptions #####
 ps_tr2_all <- ps_model_wt(
   dat             = dat_tr2_all,
@@ -160,6 +165,9 @@ ps_tr2_all <- ps_model_wt(
   clust_vars      = clust_vars
 )
 saveRDS(ps_tr2_all, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"))
+
+
+
 
 ## MET 5-14 days: first-interruption #####
 ps_tr3_first <- ps_model_wt(
@@ -182,6 +190,8 @@ ps_tr3_all <- ps_model_wt(
   clust_vars      = clust_vars
 )
 saveRDS(ps_tr3_all, paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"))
+
+
 
 
 # 3. TABLE 1 ##############
@@ -597,3 +607,7 @@ risk$tr3$all$dis$ci <- predict_cuminc(
 rm(long_dat); gc()
 
 saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3.rds"))
+
+
+
+
