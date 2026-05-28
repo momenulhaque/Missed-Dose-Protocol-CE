@@ -316,6 +316,52 @@ make_love_row <- function(ps_rds, bvars, var_labels, clustered = FALSE,
 }
 
 
+
+make_love_row_v1 <- function(ps_rds, bvars, var_labels, clustered = FALSE,
+                          trt_recode = c("no reversion" = "No dose change",
+                                         "1-<50%"    = "1-<50% reduction",
+                                         ">=50%/<=40mg" = ">=50% reduction/initial dose*",
+                                         "increase"     = "Dose increase")) {
+  
+  dat <- readRDS(ps_rds)$data_weights |>
+    mutate(
+      trt          = recode(as.character(trt), !!!trt_recode),
+      incar_grp_bl = if_else(incar_grp_bl == "1_pastyear", 1L, 0L)
+    )
+  
+  # 1-<50% vs no change
+  d_red_lt50 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+  d_red_lt50$trt <- droplevels(factor(d_red_lt50$trt))
+  
+  p_red_lt50 <- make_love_panel(d_red_lt50, bvars, var_labels,
+                           title_txt     = "1-<50% reduction\nversus no change",
+                           show_y_labels = TRUE)
+  
+  # >=50% reduction/initial dose* vs no change
+  d_red_ge50 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+  d_red_ge50$trt <- droplevels(factor(d_red_ge50$trt))
+  
+  p_red_ge50 <- make_love_panel(d_red_ge50, bvars, var_labels,
+                           title_txt     = ">=50% reduction/initial dose*\nversus no change",
+                           show_y_labels = TRUE)
+  
+  
+  
+  # Increase vs no change
+  d_inc <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+  d_inc$trt <- droplevels(factor(d_inc$trt))
+  
+  p_inc <- make_love_panel(d_inc, bvars, var_labels,
+                           title_txt     = "Dose increase\nversus no change",
+                           show_y_labels = FALSE)
+  
+  p_red_lt50 + plot_spacer()  + p_red_ge50 + plot_spacer() + p_inc +
+    plot_layout(widths = c(1, 0.07, 1, 0.07, 1), guides = "collect") &
+    theme(legend.position = "bottom",
+          legend.text     = element_text(size = 13))
+}
+
+
 expand_person_period <- function(Dat, time_var, event_var, interval_length = 7){
   Dat <- Dat %>%
     mutate(max_int = ceiling(.data[[time_var]] / interval_length))
