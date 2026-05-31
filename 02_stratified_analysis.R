@@ -17,7 +17,7 @@ source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results_v1/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 dir.create(paste0(RES_DIR, "PScore/Stratified"),   showWarnings = FALSE)
 dir.create(paste0(RES_DIR, "Risk/Stratified"),     showWarnings = FALSE)
 dir.create(paste0(RES_DIR, "Figures/Stratified"),  showWarnings = FALSE)
@@ -51,7 +51,7 @@ STRATA_LABELS <- c(
 )
 
 # Pre-processing function
-clean_trt_first_ep <- function(dat) {
+clean_trt_all <- function(dat) {
   dat |>
     mutate(
       trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456)
@@ -79,51 +79,51 @@ add_strata <- function(dat) {
 
 cat("Loading and stratifying first-in-episode cohort data...\n")
 
-raw_first_ep <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
 
-dat_tr2_first_ep_strat <- raw_first_ep |>
+dat_tr2_all_strat <- raw_all |>
   filter(trial_gap %in% 3:4) |>
-  clean_trt_first_ep() |>
+  clean_trt_all() |>
   add_strata()
 
-dat_tr3_first_ep_strat <- raw_first_ep |>
+dat_tr3_all_strat <- raw_all |>
   filter(trial_cat == "5-14") |>
-  clean_trt_first_ep() |>
+  clean_trt_all() |>
   add_strata()
 
-rm(raw_first_ep); gc()
+rm(raw_all); gc()
 
 # Print stratum sizes
 cat("\n=== Sample sizes by stratum ===\n")
-cat("\nTrial 2 (3-4 days), First-in-episode:\n")
-print(table(dat_tr2_first_ep_strat$ret_strat, dat_tr2_first_ep_strat$trt))
+cat("\nMET 3-4 day, First-in-episode:\n")
+print(table(dat_tr2_all_strat$ret_strat, dat_tr2_all_strat$trt))
 
-cat("\nTrial 3 (5-14 days), First-in-episode:\n")
-print(table(dat_tr3_first_ep_strat$ret_strat, dat_tr3_first_ep_strat$trt))
+cat("\nMET 5-14 day, First-in-episode:\n")
+print(table(dat_tr3_all_strat$ret_strat, dat_tr3_all_strat$trt))
 
 
 # 2. PROPENSITY SCORE MODELS ###################
 
 ps_strat <- list(
-  tr2 = list(first_ep = list()),
-  tr3 = list(first_ep = list())
+  tr2 = list(all = list()),
+  tr3 = list(all = list())
 )
 
-## Trial 2 (3-4 days), First-in-episode #################
+## MET 3-4 day, First-in-episode #################
 cat("\n\n════════════════════════════════════════════════════════════════\n")
-cat("TRIAL 2 (3-4 days): Fitting PS models per stratum (standard MLE)\n")
+cat("MET 3-4 day: Fitting PS models per stratum (standard MLE)\n")
 cat("First-in-episode cohort\n")
 cat("════════════════════════════════════════════════════════════════\n")
 
 for (stratum in STRATA_LEVELS) {
   cat(sprintf("\n--- Stratum: %s ---\n", STRATA_LABELS[stratum]))
   
-  dat_strat <- dat_tr2_first_ep_strat %>% filter(ret_strat == stratum)
+  dat_strat <- dat_tr2_all_strat %>% filter(ret_strat == stratum)
   cat(sprintf("Total N = %d\n", nrow(dat_strat)))
   cat("Treatment distribution:\n")
   print(table(dat_strat$trt))
   
-  ps_strat$tr2$first_ep[[stratum]] <- ps_model_wt(
+  ps_strat$tr2$all[[stratum]] <- ps_model_wt(
     dat             = dat_strat,
     exposure        = "trt",
     baselinevars    = baselinevars,
@@ -132,12 +132,12 @@ for (stratum in STRATA_LEVELS) {
     clust_vars      = clust_vars
   )
   
-  # Save
-  saveRDS(ps_strat$tr2$first_ep[[stratum]], 
-          paste0(RES_DIR, "PScore/Stratified/ps_tr2_34d_first_ep_", stratum, ".rds"))
+  # Save with _ow suffix for consistency
+  saveRDS(ps_strat$tr2$all[[stratum]], 
+          paste0(RES_DIR, "PScore/Stratified/ps_tr2_34d_all_", stratum, "_ow.rds"))
   
   # Check weights
-  wt_data <- ps_strat$tr2$first_ep[[stratum]]$data_weights
+  wt_data <- ps_strat$tr2$all[[stratum]]$data_weights
   cat("\nWeight distribution:\n")
   print(summary(wt_data$wt_stab))
   cat(sprintf("Weights > 50: %d (%.1f%%)\n", 
@@ -149,21 +149,21 @@ for (stratum in STRATA_LEVELS) {
 }
 
 
-## Trial 3 (5-14 days), First-in-episode #######
+## MET 5-14 day, First-in-episode #######
 cat("\n\n════════════════════════════════════════════════════════════════\n")
-cat("TRIAL 3 (5-14 days): Fitting PS models per stratum (standard MLE)\n")
+cat("MET 5-14 day: Fitting PS models per stratum (standard MLE)\n")
 cat("First-in-episode cohort\n")
 cat("════════════════════════════════════════════════════════════════\n")
 
 for (stratum in STRATA_LEVELS) {
   cat(sprintf("\n--- Stratum: %s ---\n", STRATA_LABELS[stratum]))
   
-  dat_strat <- dat_tr3_first_ep_strat %>% filter(ret_strat == stratum)
+  dat_strat <- dat_tr3_all_strat %>% filter(ret_strat == stratum)
   cat(sprintf("Total N = %d\n", nrow(dat_strat)))
   cat("Treatment distribution:\n")
   print(table(dat_strat$trt))
   
-  ps_strat$tr3$first_ep[[stratum]] <- ps_model_wt(
+  ps_strat$tr3$all[[stratum]] <- ps_model_wt(
     dat             = dat_strat,
     exposure        = "trt",
     baselinevars    = baselinevars,
@@ -172,12 +172,12 @@ for (stratum in STRATA_LEVELS) {
     clust_vars      = clust_vars
   )
   
-  # Save
-  saveRDS(ps_strat$tr3$first_ep[[stratum]], 
-          paste0(RES_DIR, "PScore/Stratified/ps_tr3_first_ep_", stratum, ".rds"))
+  # Save with _ow suffix for consistency
+  saveRDS(ps_strat$tr3$all[[stratum]], 
+          paste0(RES_DIR, "PScore/Stratified/ps_tr3_all_", stratum, "_ow.rds"))
   
   # Check weights
-  wt_data <- ps_strat$tr3$first_ep[[stratum]]$data_weights
+  wt_data <- ps_strat$tr3$all[[stratum]]$data_weights
   cat("\nWeight distribution:\n")
   print(summary(wt_data$wt_stab))
   cat(sprintf("Weights > 50: %d (%.1f%%)\n", 
@@ -242,15 +242,15 @@ cat("\n\n═══════════════════════�
 cat("Creating PS distribution plots: Trial 2 (stratified)\n")
 cat("════════════════════════════════════════════════════════════════\n")
 
-dat_ps_tr2_first_ep <- prep_ps_strat_dat(ps_strat$tr2$first_ep)
-plot_ps_tr2_first_ep <- ps_score_plot_strat(
-  dat_ps_tr2_first_ep, 
-  "MET interruption of 3-4 days: PS Distribution"
+dat_ps_tr2_all <- prep_ps_strat_dat(ps_strat$tr2$all)
+plot_ps_tr2_all <- ps_score_plot_strat(
+  dat_ps_tr2_all, 
+  "MET interruption of 3-4 days: PS Distribution (by retention length)"
 ) + guides(color = guide_legend(nrow = 2))
 
-jpeg(paste0(RES_DIR, "Figures/Stratified/ps_dist_tr2_first_ep_strat.jpg"),
-     width = 4200, height = 2000, res = 300)
-print(plot_ps_tr2_first_ep)
+jpeg(paste0(RES_DIR, "Figures/Stratified/ps_dist_tr2_34d_all_strat.jpg"),
+     width = 4500, height = 2200, res = 300)
+print(plot_ps_tr2_all)
 dev.off()
 
 cat("✓ Trial 2 PS distribution plot saved\n")
@@ -258,15 +258,15 @@ cat("✓ Trial 2 PS distribution plot saved\n")
 ## Trial 3
 cat("\nCreating PS distribution plots: Trial 3 (stratified)\n")
 
-dat_ps_tr3_first_ep <- prep_ps_strat_dat(ps_strat$tr3$first_ep)
-plot_ps_tr3_first_ep <- ps_score_plot_strat(
-  dat_ps_tr3_first_ep, 
-  "MET interruption of 5-14 days: PS Distribution"
+dat_ps_tr3_all <- prep_ps_strat_dat(ps_strat$tr3$all)
+plot_ps_tr3_all <- ps_score_plot_strat(
+  dat_ps_tr3_all, 
+  "MET interruption of 5-14 days: PS Distribution (by retention length)"
 ) + guides(color = guide_legend(nrow = 2))
 
-jpeg(paste0(RES_DIR, "Figures/Stratified/ps_dist_tr3_first_ep_strat.jpg"),
-     width = 4200, height = 2000, res = 300)
-print(plot_ps_tr3_first_ep)
+jpeg(paste0(RES_DIR, "Figures/Stratified/ps_dist_tr3_514d_all_strat.jpg"),
+     width = 4500, height = 2200, res = 300)
+print(plot_ps_tr3_all)
 dev.off()
 
 cat("✓ Trial 3 PS distribution plot saved\n")
@@ -278,21 +278,21 @@ HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
 HORIZONS_CI    <- c(30, 60, 90, 180, 365)
 
 risk_strat <- list(
-  tr2 = list(first_ep = list()),
-  tr3 = list(first_ep = list())
+  tr2 = list(all = list()),
+  tr3 = list(all = list())
 )
 
-## ── Trial 2 (3-4 days) ───────────────────────────────────────────────────────
+## ── MET 3-4 day ───────────────────────────────────────────────────────
 cat("\n\n════════════════════════════════════════════════════════════════\n")
-cat("Computing cumulative incidence: Trial 2 (3-4 days)\n")
+cat("Computing cumulative incidence: MET 3-4 day\n")
 cat("First-in-episode cohort, stratified by retention length\n")
 cat("════════════════════════════════════════════════════════════════\n")
 
 for (stratum in STRATA_LEVELS) {
   cat(sprintf("\n--- Stratum: %s ---\n", STRATA_LABELS[stratum]))
   
-  ps_fit <- ps_strat$tr2$first_ep[[stratum]]
-  risk_strat$tr2$first_ep[[stratum]] <- list(od = list(), dis = list())
+  ps_fit <- ps_strat$tr2$all[[stratum]]
+  risk_strat$tr2$all[[stratum]] <- list(od = list(), dis = list())
   
   ## Overdose
   cat("  Computing overdose risk...\n")
@@ -303,7 +303,7 @@ for (stratum in STRATA_LEVELS) {
     interval_length = 14
   )
   
-  risk_strat$tr2$first_ep[[stratum]]$od$curve <- predict_cuminc(
+  risk_strat$tr2$all[[stratum]]$od$curve <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ddose_prev", "ret_length"),
@@ -315,7 +315,7 @@ for (stratum in STRATA_LEVELS) {
     wt_type = "wt_trunc"
   )
   
-  risk_strat$tr2$first_ep[[stratum]]$od$ci <- predict_cuminc(
+  risk_strat$tr2$all[[stratum]]$od$ci <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ddose_prev", "ret_length"),
@@ -336,7 +336,7 @@ for (stratum in STRATA_LEVELS) {
     interval_length = 14
   )
   
-  risk_strat$tr2$first_ep[[stratum]]$dis$curve <- predict_cuminc(
+  risk_strat$tr2$all[[stratum]]$dis$curve <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ret_length"),
@@ -348,7 +348,7 @@ for (stratum in STRATA_LEVELS) {
     wt_type = "wt_trunc"
   )
   
-  risk_strat$tr2$first_ep[[stratum]]$dis$ci <- predict_cuminc(
+  risk_strat$tr2$all[[stratum]]$dis$ci <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ret_length"),
@@ -363,21 +363,21 @@ for (stratum in STRATA_LEVELS) {
   rm(long_dat); gc()
 }
 
-saveRDS(risk_strat$tr2$first_ep, paste0(RES_DIR, "Risk/Stratified/risk_tr2_34d_first_ep_strat.rds"))
+saveRDS(risk_strat$tr2$all, paste0(RES_DIR, "Risk/Stratified/risk_tr2_34d_all_strat.rds"))
 cat("\n✓ Trial 2 risk estimates saved\n")
 
 
-## ── Trial 3 (5-14 days) ──────────────────────────────────────────────────────
+## ── MET 5-14 day ──────────────────────────────────────────────────────
 cat("\n\n════════════════════════════════════════════════════════════════\n")
-cat("Computing cumulative incidence: Trial 3 (5-14 days)\n")
+cat("Computing cumulative incidence: MET 5-14 day\n")
 cat("First-in-episode cohort, stratified by retention length\n")
 cat("════════════════════════════════════════════════════════════════\n")
 
 for (stratum in STRATA_LEVELS) {
   cat(sprintf("\n--- Stratum: %s ---\n", STRATA_LABELS[stratum]))
   
-  ps_fit <- ps_strat$tr3$first_ep[[stratum]]
-  risk_strat$tr3$first_ep[[stratum]] <- list(od = list(), dis = list())
+  ps_fit <- ps_strat$tr3$all[[stratum]]
+  risk_strat$tr3$all[[stratum]] <- list(od = list(), dis = list())
   
   ## Overdose
   cat("  Computing overdose risk...\n")
@@ -388,7 +388,7 @@ for (stratum in STRATA_LEVELS) {
     interval_length = 14
   )
   
-  risk_strat$tr3$first_ep[[stratum]]$od$curve <- predict_cuminc(
+  risk_strat$tr3$all[[stratum]]$od$curve <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ddose_prev", "ret_length"),
@@ -400,7 +400,7 @@ for (stratum in STRATA_LEVELS) {
     wt_type = "wt_trunc"
   )
   
-  risk_strat$tr3$first_ep[[stratum]]$od$ci <- predict_cuminc(
+  risk_strat$tr3$all[[stratum]]$od$ci <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ddose_prev", "ret_length"),
@@ -421,7 +421,7 @@ for (stratum in STRATA_LEVELS) {
     interval_length = 14
   )
   
-  risk_strat$tr3$first_ep[[stratum]]$dis$curve <- predict_cuminc(
+  risk_strat$tr3$all[[stratum]]$dis$curve <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ret_length"),
@@ -433,7 +433,7 @@ for (stratum in STRATA_LEVELS) {
     wt_type = "wt_trunc"
   )
   
-  risk_strat$tr3$first_ep[[stratum]]$dis$ci <- predict_cuminc(
+  risk_strat$tr3$all[[stratum]]$dis$ci <- predict_cuminc(
     Dat_expanded = long_dat,
     trt_var = "trt",
     covs = c("ret_length"),
@@ -448,28 +448,5 @@ for (stratum in STRATA_LEVELS) {
   rm(long_dat); gc()
 }
 
-saveRDS(risk_strat$tr3$first_ep, paste0(RES_DIR, "Risk/Stratified/risk_tr3_first_ep_strat.rds"))
+saveRDS(risk_strat$tr3$all, paste0(RES_DIR, "Risk/Stratified/risk_tr3_514d_all_strat.rds"))
 cat("\n✓ Trial 3 risk estimates saved\n")
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ANALYSIS COMPLETE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-cat("\n")
-cat("════════════════════════════════════════════════════════════════\n")
-cat("STRATIFIED ANALYSIS COMPLETE\n")
-cat("════════════════════════════════════════════════════════════════\n")
-cat("\nCohort: First-in-episode (prev)\n")
-cat("Stratification variable: Retention length at baseline\n")
-cat("  • ≤30 days (early treatment initiates)\n")
-cat("  • 31-90 days (mid-treatment)\n")
-cat("  • 91+ days (established patients)\n")
-cat("\nResults saved to:\n")
-cat(sprintf("  PS models:     %sPScore/Stratified/\n", RES_DIR))
-cat(sprintf("  Risk estimates: %sRisk/Stratified/\n", RES_DIR))
-cat(sprintf("  Figures:       %sFigures/Stratified/\n", RES_DIR))
-cat("\nFiles created:\n")
-cat("  ✓ 6 PS model files (2 trials × 3 strata)\n")
-cat("  ✓ 2 PS distribution figures (stratified)\n")
-cat("  ✓ 2 risk estimate RDS files (tr2, tr3 × 3 strata each)\n")
-cat("════════════════════════════════════════════════════════════════\n")

@@ -238,6 +238,407 @@ for (nm in c("tr2_first", "tr2_all", "tr3_first", "tr3_all")) {
 
 saveWorkbook(wb, paste0(RES_DIR, "Tables/", "table1.xlsx"), overwrite = TRUE)
 
+# EXPORT SMD for TABLE1 - WIDE FORMAT #############
+
+cat("\n=== Extracting SMD Results and Creating Excel Summary (Wide Format) ===\n")
+
+# Function to extract SMDs from bal.tab object
+extract_smd_results <- function(bal_tab_obj, comparison_name) {
+  
+  # Extract balance table
+  balance_df <- bal_tab_obj$Balance
+  
+  # Get before and after weights SMDs
+  results <- data.frame(
+    Variable = rownames(balance_df),
+    SMD_Before = as.numeric(balance_df$Diff.Un),
+    SMD_After = as.numeric(balance_df$Diff.Adj),
+    Comparison = comparison_name,
+    stringsAsFactors = FALSE
+  )
+  
+  return(results)
+}
+
+## MET interruption of 3-4 days #############
+
+cat("\nExtracting SMDs: Trial 2 (3-4 days)...\n")
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
+
+dat <- ps_fit$data_weights |>
+  mutate(
+    trt = recode(trt,
+                 "no reversion"       = "No dose change",
+                 "1-<50%"             = "1-<50% reduction",
+                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 "increase"           = "Dose increase"),
+    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
+  )
+
+fmla <- as.formula(paste("trt ~", paste(baselinevars, collapse = " + ")))
+
+# Extract SMDs for all pairwise comparisons - FIRST-IN-FIRST-EPISODE
+smd_tr2_first_list <- list()
+
+# 1-<50% vs no change
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr2_first_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
+
+
+# >=50% vs no change
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr2_first_list[[">=50% vs no change"]] <- extract_smd_results(prep_2, ">=50% vs no change")
+
+
+# Increase vs no change
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr2_first_list[["Increase vs no change"]] <- extract_smd_results(prep_3, "Increase vs no change")
+
+
+# Combine into long format
+smd_tr2_first_long <- bind_rows(smd_tr2_first_list) 
+
+# Convert to wide format with proper column ordering
+smd_tr2_first_wide <- smd_tr2_first_long %>%
+  pivot_wider(
+    names_from = Comparison,
+    values_from = c(SMD_Before, SMD_After),
+    names_glue = "{Comparison}_{.value}"
+  ) %>%
+  # Calculate max SMD per variable (actual signed value with largest absolute magnitude)
+  rowwise() %>%
+  mutate(
+    max_SMD_Before = {
+      vals <- c(`1-<50% vs no change_SMD_Before`, 
+                `>=50% vs no change_SMD_Before`, 
+                `Increase vs no change_SMD_Before`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    },
+    max_SMD_After = {
+      vals <- c(`1-<50% vs no change_SMD_After`, 
+                `>=50% vs no change_SMD_After`, 
+                `Increase vs no change_SMD_After`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    }
+  ) %>%
+  ungroup() %>%
+  # Reorder columns: Variable, then pairs of Before/After for each comparison, then max columns
+  select(Variable,
+         `1-<50% vs no change_SMD_Before`, `1-<50% vs no change_SMD_After`,
+         `>=50% vs no change_SMD_Before`, `>=50% vs no change_SMD_After`,
+         `Increase vs no change_SMD_Before`, `Increase vs no change_SMD_After`,
+         max_SMD_Before, max_SMD_After) %>%
+  # Rename columns for cleaner display
+  rename(
+    `1-<50% Before` = `1-<50% vs no change_SMD_Before`,
+    `1-<50% After` = `1-<50% vs no change_SMD_After`,
+    `>=50% Before` = `>=50% vs no change_SMD_Before`,
+    `>=50% After` = `>=50% vs no change_SMD_After`,
+    `Increase Before` = `Increase vs no change_SMD_Before`,
+    `Increase After` = `Increase vs no change_SMD_After`
+  )
+
+cat("  ✓ Trial 2, First-in-first-episode SMDs extracted (wide format)\n")
+
+# ── Extract SMDs: FIRST-IN-ANY-EPISODE ──
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
+dat <- ps_fit$data_weights |>
+  mutate(
+    trt = recode(trt,
+                 "no reversion"       = "No dose change",
+                 "1-<50%"             = "1-<50% reduction",
+                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 "increase"           = "Dose increase"),
+    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
+    prior_episode = as.numeric(prior_episode)
+  )
+
+fmla_ep <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_episode"), collapse = " + ")))
+
+smd_tr2_ep_list <- list()
+
+# 1-<50% vs no change
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla_ep, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr2_ep_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
+
+# >=50% vs no change
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla_ep, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr2_ep_list[[">=50% vs no change"]] <- extract_smd_results(prep_2, ">=50% vs no change")
+
+# Increase vs no change
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla_ep, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr2_ep_list[["Increase vs no change"]] <- extract_smd_results(prep_3, "Increase vs no change")
+
+smd_tr2_ep_long <- bind_rows(smd_tr2_ep_list)
+
+# Convert to wide format with proper column ordering
+smd_tr2_ep_wide <- smd_tr2_ep_long %>%
+  pivot_wider(
+    names_from = Comparison,
+    values_from = c(SMD_Before, SMD_After),
+    names_glue = "{Comparison}_{.value}"
+  ) %>%
+  # Calculate max SMD per variable
+  rowwise() %>%
+  mutate(
+    max_SMD_Before = {
+      vals <- c(`1-<50% vs no change_SMD_Before`, 
+                `>=50% vs no change_SMD_Before`, 
+                `Increase vs no change_SMD_Before`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    },
+    max_SMD_After = {
+      vals <- c(`1-<50% vs no change_SMD_After`, 
+                `>=50% vs no change_SMD_After`, 
+                `Increase vs no change_SMD_After`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    }
+  ) %>%
+  ungroup() %>%
+  select(Variable,
+         `1-<50% vs no change_SMD_Before`, `1-<50% vs no change_SMD_After`,
+         `>=50% vs no change_SMD_Before`, `>=50% vs no change_SMD_After`,
+         `Increase vs no change_SMD_Before`, `Increase vs no change_SMD_After`,
+         max_SMD_Before, max_SMD_After) %>%
+  rename(
+    `1-<50% Before` = `1-<50% vs no change_SMD_Before`,
+    `1-<50% After` = `1-<50% vs no change_SMD_After`,
+    `>=50% Before` = `>=50% vs no change_SMD_Before`,
+    `>=50% After` = `>=50% vs no change_SMD_After`,
+    `Increase Before` = `Increase vs no change_SMD_Before`,
+    `Increase After` = `Increase vs no change_SMD_After`
+  )
+
+cat("  ✓ Trial 2, First-in-any-episode SMDs extracted (wide format)\n")
+
+## MET interruption of 5-14 days #############
+
+cat("\nExtracting SMDs: Trial 3 (5-14 days)...\n")
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
+dat <- ps_fit$data_weights |>
+  mutate(
+    trt = recode(trt,
+                 "no reversion"       = "No dose change",
+                 "1-<50%"             = "1-<50% reduction",
+                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 "increase"           = "Dose increase"),
+    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
+  )
+
+fmla <- as.formula(paste("trt ~", paste(baselinevars, collapse = " + ")))
+
+smd_tr3_first_list <- list()
+
+# 1-<50% vs no change
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr3_first_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
+
+# >=50% vs no change
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr3_first_list[[">=50% vs no change"]] <- extract_smd_results(prep_2, ">=50% vs no change")
+
+# Increase vs no change
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr3_first_list[["Increase vs no change"]] <- extract_smd_results(prep_3, "Increase vs no change")
+
+smd_tr3_first_long <- bind_rows(smd_tr3_first_list)
+
+# Convert to wide format with proper column ordering
+smd_tr3_first_wide <- smd_tr3_first_long %>%
+  pivot_wider(
+    names_from = Comparison,
+    values_from = c(SMD_Before, SMD_After),
+    names_glue = "{Comparison}_{.value}"
+  ) %>%
+  # Calculate max SMD per variable
+  rowwise() %>%
+  mutate(
+    max_SMD_Before = {
+      vals <- c(`1-<50% vs no change_SMD_Before`, 
+                `>=50% vs no change_SMD_Before`, 
+                `Increase vs no change_SMD_Before`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    },
+    max_SMD_After = {
+      vals <- c(`1-<50% vs no change_SMD_After`, 
+                `>=50% vs no change_SMD_After`, 
+                `Increase vs no change_SMD_After`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    }
+  ) %>%
+  ungroup() %>%
+  select(Variable,
+         `1-<50% vs no change_SMD_Before`, `1-<50% vs no change_SMD_After`,
+         `>=50% vs no change_SMD_Before`, `>=50% vs no change_SMD_After`,
+         `Increase vs no change_SMD_Before`, `Increase vs no change_SMD_After`,
+         max_SMD_Before, max_SMD_After) %>%
+  rename(
+    `1-<50% Before` = `1-<50% vs no change_SMD_Before`,
+    `1-<50% After` = `1-<50% vs no change_SMD_After`,
+    `>=50% Before` = `>=50% vs no change_SMD_Before`,
+    `>=50% After` = `>=50% vs no change_SMD_After`,
+    `Increase Before` = `Increase vs no change_SMD_Before`,
+    `Increase After` = `Increase vs no change_SMD_After`
+  )
+
+cat("  ✓ Trial 3, First-in-first-episode SMDs extracted (wide format)\n")
+
+# ── Extract SMDs: FIRST-IN-ANY-EPISODE ──
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
+dat <- ps_fit$data_weights |>
+  mutate(
+    trt = recode(trt,
+                 "no reversion"       = "No dose change",
+                 "1-<50%"             = "1-<50% reduction",
+                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 "increase"           = "Dose increase"),
+    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
+    prior_episode = as.numeric(prior_episode)
+  )
+
+fmla_ep <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_episode"), collapse = " + ")))
+
+smd_tr3_ep_list <- list()
+
+# 1-<50% vs no change
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla_ep, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr3_ep_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
+
+# >=50% vs no change
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla_ep, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr3_ep_list[[">=50% vs no change"]] <- extract_smd_results(prep_2, ">=50% vs no change")
+
+# Increase vs no change
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla_ep, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+smd_tr3_ep_list[["Increase vs no change"]] <- extract_smd_results(prep_3, "Increase vs no change")
+
+smd_tr3_ep_long <- bind_rows(smd_tr3_ep_list)
+
+# Convert to wide format with proper column ordering
+smd_tr3_ep_wide <- smd_tr3_ep_long %>%
+  pivot_wider(
+    names_from = Comparison,
+    values_from = c(SMD_Before, SMD_After),
+    names_glue = "{Comparison}_{.value}"
+  ) %>%
+  # Calculate max SMD per variable
+  rowwise() %>%
+  mutate(
+    max_SMD_Before = {
+      vals <- c(`1-<50% vs no change_SMD_Before`, 
+                `>=50% vs no change_SMD_Before`, 
+                `Increase vs no change_SMD_Before`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    },
+    max_SMD_After = {
+      vals <- c(`1-<50% vs no change_SMD_After`, 
+                `>=50% vs no change_SMD_After`, 
+                `Increase vs no change_SMD_After`)
+      vals <- vals[!is.na(vals)]
+      if (length(vals) > 0) vals[which.max(abs(vals))] else NA
+    }
+  ) %>%
+  ungroup() %>%
+  select(Variable,
+         `1-<50% vs no change_SMD_Before`, `1-<50% vs no change_SMD_After`,
+         `>=50% vs no change_SMD_Before`, `>=50% vs no change_SMD_After`,
+         `Increase vs no change_SMD_Before`, `Increase vs no change_SMD_After`,
+         max_SMD_Before, max_SMD_After) %>%
+  rename(
+    `1-<50% Before` = `1-<50% vs no change_SMD_Before`,
+    `1-<50% After` = `1-<50% vs no change_SMD_After`,
+    `>=50% Before` = `>=50% vs no change_SMD_Before`,
+    `>=50% After` = `>=50% vs no change_SMD_After`,
+    `Increase Before` = `Increase vs no change_SMD_Before`,
+    `Increase After` = `Increase vs no change_SMD_After`
+  )
+
+cat("  ✓ Trial 3, First-in-any-episode SMDs extracted (wide format)\n")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SAVE TO EXCEL
+# ═════════════════════════════════════════════════════════════════════════════
+
+library(openxlsx)
+
+wb <- createWorkbook()
+
+# Trial 2, First-in-first-episode
+addWorksheet(wb, sheetName = "TR2_First-in-first")
+writeData(wb, sheet = "TR2_First-in-first", x = smd_tr2_first_wide)
+
+# Trial 2, First-in-any-episode
+addWorksheet(wb, sheetName = "TR2_First-in-any")
+writeData(wb, sheet = "TR2_First-in-any", x = smd_tr2_ep_wide)
+
+# Trial 3, First-in-first-episode
+addWorksheet(wb, sheetName = "TR3_First-in-first")
+writeData(wb, sheet = "TR3_First-in-first", x = smd_tr3_first_wide)
+
+# Trial 3, First-in-any-episode
+addWorksheet(wb, sheetName = "TR3_First-in-any")
+writeData(wb, sheet = "TR3_First-in-any", x = smd_tr3_ep_wide)
+
+saveWorkbook(wb, paste0(RES_DIR, "Tables/", "smd_results_all_wide.xlsx"), overwrite = TRUE)
 
 
 # 4. PS DISTRIBUTION PLOTS ####
@@ -333,6 +734,8 @@ jpeg(paste0(RES_DIR, "Figures/", "ps_distribution.jpg"),
      width = 5500, height = 4200, res = 300)
 plot_ps
 dev.off()
+
+
 
 
 # 5. SMD LOVE PLOTS ############
@@ -1025,6 +1428,7 @@ risk$tr3$first$dis$curve <- predict_cuminc(
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
+
 
 risk$tr3$first$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
