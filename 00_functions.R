@@ -1,139 +1,54 @@
-# ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.99, 
-#                         out_vars, clust_vars,
-#                         baselinevars = c("sexM", "age_lt30", "age_30_39", 
-#                                          "age_40_49", "age_ge50", "rural",
-#                                          "year", "po_preOUD", "phy_att_gr2", 
-#                                          "social_assist", "ret_length", "home_grp_b", 
-#                                          "incar_grp_bl", "drug_acute", "cci_gt0", 
-#                                          "copd_asthma", "sed_psy_med", "po", "sud", 
-#                                          "aud", "smd", "hcv", "tob", "udt", "ddose_prev", 
-#                                          "clin_size", "virtual_care", "pss"),
-#                         continuous_vars = c("ddose_prev", "year", "ret_length")) {
-#   
-#   library(dplyr)
-#   library(nnet)
-#   
-#   model_data <- dat %>%
-#     dplyr::select(all_of(c(out_vars, clust_vars, exposure, baselinevars))) %>%
-#     mutate(across(all_of(setdiff(baselinevars, continuous_vars)), as.factor)) %>%
-#     filter(if_all(all_of(c(exposure, baselinevars)), ~ !is.na(.)))
-#   
-#   valid_baselinevars <- baselinevars[sapply(model_data[baselinevars], function(x) length(unique(x)) > 1)]
-#   formula_ps <- as.formula(paste(exposure, "~", paste(valid_baselinevars, collapse = " + ")))
-#   
-#   # Ensure exposure is a factor
-#   model_data[[exposure]] <- as.factor(model_data[[exposure]])
-#   levels_exp <- levels(model_data[[exposure]])
-#   
-#   # Fit multinomial PS model
-#   ps_fit <- multinom(formula_ps, data = model_data, trace = FALSE)
-#   ps_probs <- predict(ps_fit, type = "probs")
-#   
-#   ps_probs <- matrix(ps_probs, ncol = length(levels_exp))
-#   colnames(ps_probs) <- levels_exp
-#   
-#   # Get marginal probabilities (stabilizer)
-#   marginal_probs <- prop.table(table(model_data[[exposure]]))
-#   
-#   # Compute weights
-#   obs_exposure <- model_data[[exposure]]
-#   model_data$ps <- mapply(function(i, trt) ps_probs[i, trt], 
-#                           i = seq_along(obs_exposure), 
-#                           trt = obs_exposure)
-#   model_data$stab_numerator <- marginal_probs[as.character(obs_exposure)]
-#   model_data$wt_stab <- as.numeric(as.character(model_data$stab_numerator / model_data$ps))
-#   
-#   # Truncate weights
-#   p_low <- quantile(model_data$wt_stab, trunc_low)
-#   p_high <- quantile(model_data$wt_stab, trunc_high)
-#   model_data$wt_trunc <- pmin(pmax(model_data$wt_stab, p_low), p_high)
-#   
-#   # Truncate weights
-#   ps_probs_trunc <- as.data.frame(
-#     lapply(ps_probs, function(x) {
-#       p_low  <- quantile(x, trunc_low)
-#       p_high <- quantile(x, trunc_high)
-#       pmin(pmax(x, p_low), p_high)
-#     })
-#   )
-#   
-#   p_low <- quantile(model_data$ps, trunc_low)
-#   p_high <- quantile(model_data$ps, trunc_high)
-#   model_data$ps_trunc <- pmin(pmax(model_data$ps, p_low), p_high)
-#   
-#   ## ow
-#   tilting_fn <- apply(ps_probs, 1, function(x) sum(1/x)) 
-#   
-#   tilting_fn_trunc <- apply(ps_probs_trunc, 1, function(x) sum(1/x)) 
-#   
-#   model_data$ow_wt <- as.numeric(1/ (tilting_fn*model_data$ps))
-#   
-#   model_data$ow_wt_trunc <- as.numeric(1/ (tilting_fn_trunc*model_data$ps_trunc))
-#   
-#   return(list(model = ps_fit, data_weights = model_data))
-# }
-
-# ps_model_wt function - UPDATED to retain all original variables
-# Fits propensity score model and computes overlap weights
-# Returns data_weights with ALL original variables + weight columns
-
-ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.99, 
+ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.99,
                         out_vars, clust_vars,
-                        baselinevars = c("sexM", "age_lt30", "age_30_39", 
+                        baselinevars = c("sexM", "age_lt30", "age_30_39",
                                          "age_40_49", "age_ge50", "rural",
-                                         "year", "po_preOUD", "phy_att_gr2", 
-                                         "social_assist", "ret_length", "home_grp_b", 
-                                         "incar_grp_bl", "drug_acute", "cci_gt0", 
-                                         "copd_asthma", "sed_psy_med", "po", "sud", 
-                                         "aud", "smd", "hcv", "tob", "udt", "ddose_prev", 
+                                         "year", "po_preOUD", "phy_att_gr2",
+                                         "social_assist", "ret_length", "home_grp_b",
+                                         "incar_grp_bl", "drug_acute", "cci_gt0",
+                                         "copd_asthma", "sed_psy_med", "po", "sud",
+                                         "aud", "smd", "hcv", "tob", "udt", "ddose_prev",
                                          "clin_size", "virtual_care", "pss"),
                         continuous_vars = c("ddose_prev", "year", "ret_length")) {
-  
+
   library(dplyr)
   library(nnet)
-  
-  # CHANGE: Keep FULL original dataset, not just selected variables
-  full_data <- dat  # Store full original data for later merging
-  
+
   model_data <- dat %>%
     dplyr::select(all_of(c(out_vars, clust_vars, exposure, baselinevars))) %>%
     mutate(across(all_of(setdiff(baselinevars, continuous_vars)), as.factor)) %>%
     filter(if_all(all_of(c(exposure, baselinevars)), ~ !is.na(.)))
-  
-  # Track which rows are kept after filtering
-  kept_rows <- which(!is.na(dat[[exposure]]) & rowSums(is.na(dat[baselinevars])) == 0)
-  
+
   valid_baselinevars <- baselinevars[sapply(model_data[baselinevars], function(x) length(unique(x)) > 1)]
   formula_ps <- as.formula(paste(exposure, "~", paste(valid_baselinevars, collapse = " + ")))
-  
+
   # Ensure exposure is a factor
   model_data[[exposure]] <- as.factor(model_data[[exposure]])
   levels_exp <- levels(model_data[[exposure]])
-  
+
   # Fit multinomial PS model
   ps_fit <- multinom(formula_ps, data = model_data, trace = FALSE)
   ps_probs <- predict(ps_fit, type = "probs")
-  
+
   ps_probs <- matrix(ps_probs, ncol = length(levels_exp))
   colnames(ps_probs) <- levels_exp
-  
+
   # Get marginal probabilities (stabilizer)
   marginal_probs <- prop.table(table(model_data[[exposure]]))
-  
+
   # Compute weights
   obs_exposure <- model_data[[exposure]]
-  model_data$ps <- mapply(function(i, trt) ps_probs[i, trt], 
-                          i = seq_along(obs_exposure), 
+  model_data$ps <- mapply(function(i, trt) ps_probs[i, trt],
+                          i = seq_along(obs_exposure),
                           trt = obs_exposure)
   model_data$stab_numerator <- marginal_probs[as.character(obs_exposure)]
   model_data$wt_stab <- as.numeric(as.character(model_data$stab_numerator / model_data$ps))
-  
+
   # Truncate weights
   p_low <- quantile(model_data$wt_stab, trunc_low)
   p_high <- quantile(model_data$wt_stab, trunc_high)
   model_data$wt_trunc <- pmin(pmax(model_data$wt_stab, p_low), p_high)
-  
-  # Truncate PS probabilities
+
+  # Truncate weights
   ps_probs_trunc <- as.data.frame(
     lapply(ps_probs, function(x) {
       p_low  <- quantile(x, trunc_low)
@@ -141,46 +56,22 @@ ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.
       pmin(pmax(x, p_low), p_high)
     })
   )
-  
+
   p_low <- quantile(model_data$ps, trunc_low)
   p_high <- quantile(model_data$ps, trunc_high)
   model_data$ps_trunc <- pmin(pmax(model_data$ps, p_low), p_high)
-  
-  # Compute overlap weights
-  tilting_fn <- apply(ps_probs, 1, function(x) sum(1/x)) 
-  tilting_fn_trunc <- apply(ps_probs_trunc, 1, function(x) sum(1/x)) 
-  
+
+  ## ow
+  tilting_fn <- apply(ps_probs, 1, function(x) sum(1/x))
+
+  tilting_fn_trunc <- apply(ps_probs_trunc, 1, function(x) sum(1/x))
+
   model_data$ow_wt <- as.numeric(1/ (tilting_fn*model_data$ps))
+
   model_data$ow_wt_trunc <- as.numeric(1/ (tilting_fn_trunc*model_data$ps_trunc))
-  
-  # CHANGE: Merge back with FULL original data to retain all variables
-  weight_cols <- model_data %>%
-    dplyr::select(all_of(c(exposure, "ps", "ps_trunc", "stab_numerator", 
-                           "wt_stab", "wt_trunc", "ow_wt", "ow_wt_trunc")))
-  
-  # Add row numbers for matching
-  weight_cols$..row_id.. <- seq_len(nrow(weight_cols))
-  
-  # Get full data for kept rows only
-  full_data_kept <- full_data[kept_rows, ] %>%
-    as_tibble() %>%
-    mutate(..row_id.. = seq_len(n()))
-  
-  # Merge weights onto full data
-  data_weights <- full_data_kept %>%
-    left_join(weight_cols, by = "..row_id..") %>%
-    dplyr::select(-..row_id..)
-  
-  return(list(model = ps_fit, data_weights = data_weights))
+
+  return(list(model = ps_fit, data_weights = model_data))
 }
-
-
-
-
-#    LASSO PS MODEL — memory-efficient, handles sparsity, variable selection
-#    Recommended for STRATIFIED analyses with small n and near-positivity
-#    Works for multinomial exposure
-#    Reference: Tibshrani (JRSS-B, 1996)
 
 ps_model_lasso <- function(dat, exposure = "trt",
                            trunc_low  = 0.01, trunc_high = 0.99,
@@ -275,7 +166,9 @@ ps_model_lasso <- function(dat, exposure = "trt",
 }
 
 
-
+ps_rds = paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds")
+names(dat)
+dat %>% count(trt)
 
 make_table1 <- function(ps_rds, bvars, cont_vars, clustered = FALSE) {
   

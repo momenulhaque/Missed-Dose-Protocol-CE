@@ -1,9 +1,9 @@
 # Load Packages ##################
 # 01_main_analysis.R
-# Trials 2 and 3 - methadone interruption 3-4d and 5-14d
-# Two cohort designs:
-#   first_interruption of episode  (formerly removed)    - TT_analytic_prev_sens_nw_m data set
-#   all_interruptions of episode  (formerly prevalent new users)     - TT_analytic_rprev_sens_nw_m data set
+# Two trials - methadone interruption 3-4 and 5-14 days
+# Two analytic cohort:
+#   first-interruption-in-first-episode - TT_analytic_incid_sens_nw_m data set
+#   first-interruption-in-any-episode - TT_analytic_prev_sens_nw_m data set
 ###
 
 library(tidyverse)
@@ -22,7 +22,7 @@ source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")   # ps_model_wt(), pr
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results_v1/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 dir.create(paste0(RES_DIR, "PScore"),   showWarnings = FALSE)
 dir.create(paste0(RES_DIR, "Risk"),     showWarnings = FALSE)
 dir.create(paste0(RES_DIR, "Tables"),   showWarnings = FALSE)
@@ -77,7 +77,8 @@ VAR_LABELS <- c(
   clin_size_b   = "Large practice size (>300 clients)",
   virtual_care  = "Virtual care in past month",
   pss           = "Prescriber safer supply",
-  prior_gap     = "Total OAT interruptions since initiation"
+  prior_gap     = "Total OAT interruptions since initiation",
+  prior_episode = "Total prior episode"
 )
 
 # Shared pre-processing: collapse all reduction categories into one
@@ -98,18 +99,20 @@ clean_trt_all <- function(dat) {
     ) |>
     rename(trt = trt_s456) |>
     filter(trt %in% TRT_LEVELS) |>
-    mutate(trt = factor(trt, levels = TRT_LEVELS)) |>
+    mutate(trt = factor(trt, levels = TRT_LEVELS),
+           prior_episode = episode - 1) |>
     group_by(studyid_rev, episode) |>
     mutate(
       prior_gap     = cumsum(gap_days),
       prior_gap_num = row_number()
     ) %>%
     ungroup()
+  
 }
 
 # 1. LOAD AND FILTER RAW SAS DATA #########
 
-# First-interruption in life
+# First-interruption-in-first-episode
 raw_first <- read_sas(file.path(DATA_DIR, "TT_analytic_incid_sens_nw_m.sas7bdat"))
 
 dat_tr2_first <- raw_first |>
@@ -122,35 +125,25 @@ dat_tr3_first <- raw_first |>
 
 rm(raw_first); gc()
 
-# First-interruption in episode
-raw_first_ep <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
-
-dat_tr2_first_ep <- raw_first_ep |>
-  filter(trial_gap %in% 3:4) |>
-  clean_trt()
-
-dat_tr3_first_ep <- raw_first_ep |>
-  filter(trial_cat == "5-14") |>
-  clean_trt()
-
-rm(raw_first_ep); gc()
-
-# All-interruptions cohort 
-raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_rprev_sens_nw_m.sas7bdat"))
+# First-interruption-in-any-episode 
+raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
 
 dat_tr2_all <- raw_all |>
   filter(trial_gap %in% 3:4) |>
-  clean_trt_all()
+  clean_trt_all() 
 
 dat_tr3_all <- raw_all |>
   filter(trial_cat == "5-14") |>
   clean_trt_all()
+  
 
 rm(raw_all); gc()
 
+
+
 # 2. PROPENSITY SCORE WEIGHTS ################
 
-## MET 3-4 days: first-interruption in life #####
+## MET 3-4 days: first-interruption-in-first-episode #####
 
 ps_tr2_first <- ps_model_wt(
   dat             = dat_tr2_first,
@@ -161,39 +154,25 @@ ps_tr2_first <- ps_model_wt(
   clust_vars      = clust_vars
 )
 
-saveRDS(ps_tr2_first, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"))
+saveRDS(ps_tr2_first, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
 
+## MET 3-4 days: first-interruption-in-any-episode #####
 
-
-## MET 3-4 days: first-interruption in episode #####
-
-ps_tr2_first_ep <- ps_model_wt(
-  dat             = dat_tr2_first_ep,
+ps_tr2_all <- ps_model_wt(
+  dat             = dat_tr2_all,
   exposure        = "trt",
-  baselinevars    = baselinevars,
+  baselinevars    = c(baselinevars, "prior_episode"),
   continuous_vars = continuous_vars,
   out_vars        = out_vars,
   clust_vars      = clust_vars
 )
 
-saveRDS(ps_tr2_first_ep, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ep_ow.rds"))
-
-
-## MET 3-4 days: all-interruptions #####
-ps_tr2_all <- ps_model_wt(
-  dat             = dat_tr2_all,
-  exposure        = "trt",
-  baselinevars    = c(baselinevars, "prior_gap"),
-  continuous_vars = c(continuous_vars, "prior_gap"),
-  out_vars        = out_vars,
-  clust_vars      = clust_vars
-)
-saveRDS(ps_tr2_all, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"))
+saveRDS(ps_tr2_all, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
 
 
 
 
-## MET 5-14 days: first-interruption in life #####
+## MET 5-14 days: first-interruption-in-first-episode #####
 ps_tr3_first <- ps_model_wt(
   dat             = dat_tr3_first,
   exposure        = "trt",
@@ -202,30 +181,20 @@ ps_tr3_first <- ps_model_wt(
   out_vars        = out_vars,
   clust_vars      = clust_vars
 )
-saveRDS(ps_tr3_first, paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ow.rds"))
 
-## MET 5-14 days: first-interruption in episode #####
-ps_tr3_first_ep <- ps_model_wt(
-  dat             = dat_tr3_first_ep,
+saveRDS(ps_tr3_first, paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
+
+## MET 5-14 days: first-interruption-in-any-episode #####
+ps_tr3_all <- ps_model_wt(
+  dat             = dat_tr3_all,
   exposure        = "trt",
-  baselinevars    = baselinevars,
+  baselinevars    = c(baselinevars, "prior_episode"),
   continuous_vars = continuous_vars,
   out_vars        = out_vars,
   clust_vars      = clust_vars
 )
-saveRDS(ps_tr3_first_ep, paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ep_ow.rds"))
 
-
-## MET 5-14 days: all-interruptions #####
-ps_tr3_all <- ps_model_wt(
-  dat             = dat_tr3_all,
-  exposure        = "trt",
-  baselinevars    = c(baselinevars, "prior_gap"),
-  continuous_vars = c(continuous_vars, "prior_gap"),
-  out_vars        = out_vars,
-  clust_vars      = clust_vars
-)
-saveRDS(ps_tr3_all, paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"))
+saveRDS(ps_tr3_all, paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
 
 
 
@@ -234,39 +203,26 @@ saveRDS(ps_tr3_all, paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"))
 # Produces one table per trial × cohort.
 # Rows: covariates. Columns: treatment arms (unweighted) + SMD before/after weighting.
 
-
 tbl_tr2_first <- make_table1(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"),
-  bvars = baselinevars, cont_vars = continuous_vars, clustered = FALSE
-)
-
-tbl_tr2_first_ep <- make_table1(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ep_ow.rds"),
+  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"),
   bvars = baselinevars, cont_vars = continuous_vars, clustered = FALSE
 )
 
 tbl_tr2_all <- make_table1(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"),
-  bvars = c(baselinevars, "prior_gap"),
-  cont_vars = c(continuous_vars, "prior_gap"), clustered = TRUE
+  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"),
+  bvars = c(baselinevars, "prior_episode"), 
+  cont_vars = c(continuous_vars, "prior_episode"), clustered = TRUE
 )
-
-
 
 tbl_tr3_first <- make_table1(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ow.rds"),
-  bvars = baselinevars, cont_vars = continuous_vars, clustered = FALSE
-)
-
-tbl_tr3_first_ep <- make_table1(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ep_ow.rds"),
+  paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"),
   bvars = baselinevars, cont_vars = continuous_vars, clustered = FALSE
 )
 
 tbl_tr3_all <- make_table1(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"),
-  bvars = c(baselinevars, "prior_gap"),
-  cont_vars = c(continuous_vars, "prior_gap"), clustered = TRUE
+  paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"),
+  bvars = c(baselinevars, "prior_episode"), 
+  cont_vars = c(continuous_vars, "prior_episode"), clustered = TRUE
 )
 
 
@@ -274,13 +230,15 @@ library(openxlsx)
 
 wb <- createWorkbook()
 
-for (nm in c("tr2_first", "tr2_first_ep",  "tr2_all", "tr3_first_ep", "tr3_all")) {
+for (nm in c("tr2_first", "tr2_all", "tr3_first", "tr3_all")) {
   tbl <- get(paste0("tbl_", nm))
   addWorksheet(wb, sheetName = nm)
   writeData(wb, sheet = nm, x = as.data.frame(tbl), rowNames = TRUE)
 }
 
-saveWorkbook(wb, paste0(RES_DIR, "Tables/", "table1_all.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, paste0(RES_DIR, "Tables/", "table1.xlsx"), overwrite = TRUE)
+
+
 
 # 4. PS DISTRIBUTION PLOTS ####
 # Histogram + density of propensity scores by treatment arm,
@@ -347,52 +305,57 @@ prep_ps_dat <- function(ps_rds, trial_label, design_label) {
 
 
 dat_ps <- bind_rows(
-  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"),
-              "MET interruption of 3-4 days",  "First-interruption"),
-  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ep_ow.rds"),
-              "MET interruption of 3-4 days",  "First-interruption in episode"),
-  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"),
-              "MET interruption of 3-4 days",  "All-interruptions"),
-  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ow.rds"),
-              "MET interruption of 5-14 days", "First-interruption"),
-  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ep_ow.rds"),
-              "MET interruption of 5-14 days", "First-interruption in episode"),
-  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"),
-              "MET interruption of 5-14 days", "All-interruptions cohort")
+  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"),
+              "MET interruption of 3-4 days",  "First-interruption-in-first-episode"),
+  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"),
+              "MET interruption of 3-4 days",  "First-interruption-in-any-episode"),
+  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"),
+              "MET interruption of 5-14 days", "First-interruption-in-first-episode"),
+  prep_ps_dat(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"),
+              "MET interruption of 5-14 days", "First-interruption-in-any-episode")
 ) |>
   mutate(
     Trial_design = factor(
       paste0(Trial, "\n", Design),
       levels = c(
-        "MET interruption of 3-4 days\nFirst-interruption",
-        "MET interruption of 3-4 days\nFirst-interruption in episode",
-        "MET interruption of 3-4 days\nAll-interruptions",
-        "MET interruption of 5-14 days\nFirst-interruption",
-        "MET interruption of 5-14 days\nFirst-interruption in episode",
-        "MET interruption of 5-14 days\nAll-interruptions"
+        "MET interruption of 3-4 days\nFirst-interruption-in-first-episode",
+        "MET interruption of 3-4 days\nFirst-interruption-in-any-episode",
+        "MET interruption of 5-14 days\nFirst-interruption-in-first-episode",
+        "MET interruption of 5-14 days\nFirst-interruption-in-any-episode"
       )
     )
   )
 
-
 plot_ps <- ps_score_plot(dat_ps) +
-  guides(color = guide_legend(nrow = 1))
+  guides(color = guide_legend(nrow = 2))
 
 jpeg(paste0(RES_DIR, "Figures/", "ps_distribution.jpg"),
-     width = 5500, height = 3000, res = 300)
+     width = 5500, height = 4200, res = 300)
 plot_ps
 dev.off()
 
 
 # 5. SMD LOVE PLOTS ############
-cat("\n=== Creating SMD plots (6 separate figures, one per cohort) ===\n")
+# Each trial (3-4 days, 5-14 days) has 2 cohorts
+#   - First-interruption-in-first-episode
+#   - First-interruption-in-any-episode
+
+
+cat("\n=== Creating SMD plots (2 trials × 2 cohorts = 4 figures) ===\n")
+
+COMPARISON_COLORS <- c(
+  "No dose change"              = "#000000", 
+  "Dose increase"               = "#D62728",  
+  "1-<50% reduction"            = "#2CA02C",  
+  ">=50% reduction/initial dose*" = "#FF7F0E"  
+)
 
 # Global settings for love plots
 x_low    <- -0.6
 x_high   <- 0.6
 x_breaks <- c(-0.4, -0.2, 0, 0.2, 0.4)
 
-# Helper function to create one love plot with flexible y-axis labels
+# Helper function to create one love plot
 make_love_panel_v2 <- function(dat, bvars, var_labels, title_txt,
                                show_y_labels = TRUE) {
   
@@ -465,87 +428,14 @@ make_love_panel_v2 <- function(dat, bvars, var_labels, title_txt,
   plt
 }
 
-# Helper: Create one 3-panel row (1-<50% | >=50% | increase) for one trial × cohort
-make_love_row_v2 <- function(ps_rds, bvars, var_labels, show_y_labels = TRUE,
-                             trt_recode = c(
-                               "no reversion"       = "No dose change",
-                               "1-<50%"             = "1-<50%",
-                               ">=50%/<=40mg"       = ">=50%*",
-                               "increase"           = "Increase")) {
-  
-  dat <- readRDS(ps_rds)$data_weights |>
-    mutate(
-      trt          = recode(as.character(trt), !!!trt_recode),
-      incar_grp_bl = if_else(incar_grp_bl == "1_pastyear", 1L, 0L)
-    )
-  
-  # 1-<50% vs no change
-  d_1 <- subset(dat, trt %in% c("No dose change", "1-<50%"))
-  d_1$trt <- droplevels(factor(d_1$trt))
-  p_1 <- make_love_panel_v2(d_1, bvars, var_labels,
-                            title_txt = "1-<50% vs no change",
-                            show_y_labels = show_y_labels)
-  
-  # >=50% vs no change
-  d_2 <- subset(dat, trt %in% c("No dose change", ">=50%*"))
-  d_2$trt <- droplevels(factor(d_2$trt))
-  p_2 <- make_love_panel_v2(d_2, bvars, var_labels,
-                            title_txt = ">=50%* vs no change",
-                            show_y_labels = FALSE)  # Never show y-labels for middle/right
-  
-  # Increase vs no change
-  d_3 <- subset(dat, trt %in% c("No dose change", "Increase"))
-  d_3$trt <- droplevels(factor(d_3$trt))
-  p_3 <- make_love_panel_v2(d_3, bvars, var_labels,
-                            title_txt = "Increase vs no change",
-                            show_y_labels = FALSE)  # Never show y-labels for right panels
-  
-  # Stack the three panels horizontally
-  p_1 + p_2 + p_3 + plot_layout(widths = c(1.2, 1, 1), guides = "collect") &
-    theme(legend.position = "bottom", legend.text = element_text(size = 9))
-}
+## MET interruption of 3-4 days #############
 
-# ── BUILD 2×3 GRID: 2 Columns (Trials) × 3 Rows (Cohorts) ──
+cat("\nTrial 2 (3-4 days)...\n")
 
-cat("\n  Building Trial 2 rows...\n")
+### First-interruption-in-first-episode #########
+cat("  Creating SMD plots: First-interruption-in-first-episode\n")
 
-# TRIAL 2 - Row 1: First-in-life
-row_tr2_first <- make_love_row_v2(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"),
-  bvars       = baselinevars,
-  var_labels  = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-  show_y_labels = TRUE  # Left column: show labels
-)
-
-# TRIAL 2 - Row 2: First-in-episode (safety check)
-row_tr2_first_ep <- make_love_row_v2(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ep_ow.rds"),
-  bvars       = baselinevars,
-  var_labels  = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-  show_y_labels = TRUE
-)
-
-# TRIAL 2 - Row 3: All-interruptions
-row_tr2_all <- make_love_row_v2(
-  paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"),
-  bvars      = c(baselinevars, "prior_gap"),
-  var_labels = VAR_LABELS,
-  show_y_labels = TRUE
-)
-
-# ── CREATE INDIVIDUAL COMPARISON PANELS FOR EACH COHORT ──
-# Pattern: 3 horizontal panels (1-<50% | >=50% | increase) with spacers between
-# First panel shows y-axis labels, others blank
-
-cat("\n  Creating comparison panels...\n")
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# TRIAL 2 (3-4 DAYS)
-# ═════════════════════════════════════════════════════════════════════════════
-
-# ── FIRST-IN-LIFE ──
-cat("    Trial 2, First-in-life...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"))
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
 dat <- ps_fit$data_weights |>
   mutate(
     trt = recode(trt,
@@ -559,20 +449,20 @@ dat <- ps_fit$data_weights |>
 fmla <- as.formula(paste("trt ~", paste(baselinevars, collapse = " + ")))
 
 # Panel 1: 1-<50% vs no change (WITH y-axis labels)
-d_tr2_first_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
-d_tr2_first_1$trt <- droplevels(d_tr2_first_1$trt)
-prep_tr2_first_1 <- bal.tab(fmla, data = d_tr2_first_1, weights = d_tr2_first_1$wt_trunc,
-                            estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                            un = TRUE, stats = "mean.diffs")
-p_tr2_first_1 <- love.plot(prep_tr2_first_1, stat = "mean.diffs", stars = "none",
-                           thresholds = c(m = 0.1), abs = FALSE,
-                           var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                           sample.names = c("Before", "After"), position = "none", line = FALSE,
-                           colors = c("black", "red"), shapes = c(16, 16)) +
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% baselinevars],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
+  labs(x = "", y = "", color = "", shape = "", title = "1-<50% reduction\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
         axis.text.x = element_text(color = "black", size = 11),
@@ -580,20 +470,20 @@ p_tr2_first_1 <- love.plot(prep_tr2_first_1, stat = "mean.diffs", stars = "none"
         legend.position = "none")
 
 # Panel 2: >=50% vs no change (NO y-axis labels)
-d_tr2_first_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
-d_tr2_first_2$trt <- droplevels(d_tr2_first_2$trt)
-prep_tr2_first_2 <- bal.tab(fmla, data = d_tr2_first_2, weights = d_tr2_first_2$wt_trunc,
-                            estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                            un = TRUE, stats = "mean.diffs")
-p_tr2_first_2 <- love.plot(prep_tr2_first_2, stat = "mean.diffs", stars = "none",
-                           thresholds = c(m = 0.1), abs = FALSE,
-                           var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                           sample.names = c("Before", "After"), position = "none", line = FALSE,
-                           colors = c("black", "red"), shapes = c(16, 16)) +
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% baselinevars],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
         axis.text.x = element_text(color = "black", size = 11),
@@ -601,229 +491,153 @@ p_tr2_first_2 <- love.plot(prep_tr2_first_2, stat = "mean.diffs", stars = "none"
         legend.position = "none")
 
 # Panel 3: Increase vs no change (NO y-axis labels)
-d_tr2_first_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
-d_tr2_first_3$trt <- droplevels(d_tr2_first_3$trt)
-prep_tr2_first_3 <- bal.tab(fmla, data = d_tr2_first_3, weights = d_tr2_first_3$wt_trunc,
-                            estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                            un = TRUE, stats = "mean.diffs")
-p_tr2_first_3 <- love.plot(prep_tr2_first_3, stat = "mean.diffs", stars = "none",
-                           thresholds = c(m = 0.1), abs = FALSE,
-                           var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                           sample.names = c("Before", "After"), position = "none", line = FALSE,
-                           colors = c("black", "red"), shapes = c(16, 16)) +
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_3 <- love.plot(prep_3, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% baselinevars],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
+  labs(x = "", y = "", color = "", shape = "", title = "Dose increase\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
         axis.text.x = element_text(color = "black", size = 11),
         axis.text.y = element_blank(),
         legend.position = "none")
 
-# Stack panels horizontally for first-in-life
-row_tr2_first <- p_tr2_first_1 + plot_spacer() + p_tr2_first_2 + plot_spacer() + p_tr2_first_3 +
+row_tr2_first <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 +
   plot_layout(widths = c(1, 0.05, 1, 0.05, 1))
 
-# ── FIRST-IN-EPISODE (safety check) ──
-cat("    Trial 2, First-in-episode (safety)...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ep_ow.rds"))
-dat <- ps_fit$data_weights |>
-  mutate(
-    trt = recode(trt,
-                 "no reversion"       = "No dose change",
-                 "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
-                 "increase"           = "Dose increase"),
-    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
-  )
+row_tr2_first <- plot_spacer()/row_tr2_first + plot_layout(heights = c(0.05, 1))
 
-# Panel 1: (WITH y-axis labels)
-d_tr2_ep_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
-d_tr2_ep_1$trt <- droplevels(d_tr2_ep_1$trt)
-prep_tr2_ep_1 <- bal.tab(fmla, data = d_tr2_ep_1, weights = d_tr2_ep_1$wt_trunc,
-                         estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                         un = TRUE, stats = "mean.diffs")
-p_tr2_ep_1 <- love.plot(prep_tr2_ep_1, stat = "mean.diffs", stars = "none",
-                        thresholds = c(m = 0.1), abs = FALSE,
-                        var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                        sample.names = c("Before", "After"), position = "none", line = FALSE,
-                        colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_text(color = "black", size = 10),
-        legend.position = "none")
-
-# Panel 2: (NO y-axis labels)
-d_tr2_ep_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
-d_tr2_ep_2$trt <- droplevels(d_tr2_ep_2$trt)
-prep_tr2_ep_2 <- bal.tab(fmla, data = d_tr2_ep_2, weights = d_tr2_ep_2$wt_trunc,
-                         estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                         un = TRUE, stats = "mean.diffs")
-p_tr2_ep_2 <- love.plot(prep_tr2_ep_2, stat = "mean.diffs", stars = "none",
-                        thresholds = c(m = 0.1), abs = FALSE,
-                        var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                        sample.names = c("Before", "After"), position = "none", line = FALSE,
-                        colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "none")
-
-# Panel 3: (NO y-axis labels)
-d_tr2_ep_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
-d_tr2_ep_3$trt <- droplevels(d_tr2_ep_3$trt)
-prep_tr2_ep_3 <- bal.tab(fmla, data = d_tr2_ep_3, weights = d_tr2_ep_3$wt_trunc,
-                         estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                         un = TRUE, stats = "mean.diffs")
-p_tr2_ep_3 <- love.plot(prep_tr2_ep_3, stat = "mean.diffs", stars = "none",
-                        thresholds = c(m = 0.1), abs = FALSE,
-                        var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                        sample.names = c("Before", "After"), position = "none", line = FALSE,
-                        colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "none")
-
-# Stack panels horizontally for first-in-episode
-row_tr2_ep <- p_tr2_ep_1 + plot_spacer() + p_tr2_ep_2 + plot_spacer() + p_tr2_ep_3 +
-  plot_layout(widths = c(1, 0.05, 1, 0.05, 1))
-
-# ── ALL-INTERRUPTIONS ──
-cat("    Trial 2, All-interruptions...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"))
-dat <- ps_fit$data_weights |>
-  mutate(
-    trt = recode(trt,
-                 "no reversion"       = "No dose change",
-                 "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
-                 "increase"           = "Dose increase"),
-    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
-  )
-
-fmla_all <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_gap"), collapse = " + ")))
-
-# Panel 1: (WITH y-axis labels)
-d_tr2_all_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
-d_tr2_all_1$trt <- droplevels(d_tr2_all_1$trt)
-prep_tr2_all_1 <- bal.tab(fmla_all, data = d_tr2_all_1, weights = d_tr2_all_1$wt_trunc,
-                          estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                          un = TRUE, stats = "mean.diffs")
-p_tr2_all_1 <- love.plot(prep_tr2_all_1, stat = "mean.diffs", stars = "none",
-                         thresholds = c(m = 0.1), abs = FALSE,
-                         var.names = VAR_LABELS,
-                         sample.names = c("Before", "After"), position = "none", line = FALSE,
-                         colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_text(color = "black", size = 10),
-        legend.position = "bottom", legend.box = "horizontal")
-
-# Panel 2: (NO y-axis labels)
-d_tr2_all_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
-d_tr2_all_2$trt <- droplevels(d_tr2_all_2$trt)
-prep_tr2_all_2 <- bal.tab(fmla_all, data = d_tr2_all_2, weights = d_tr2_all_2$wt_trunc,
-                          estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                          un = TRUE, stats = "mean.diffs")
-p_tr2_all_2 <- love.plot(prep_tr2_all_2, stat = "mean.diffs", stars = "none",
-                         thresholds = c(m = 0.1), abs = FALSE,
-                         var.names = VAR_LABELS,
-                         sample.names = c("Before", "After"), position = "none", line = FALSE,
-                         colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "none")
-
-# Panel 3: (NO y-axis labels)
-d_tr2_all_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
-d_tr2_all_3$trt <- droplevels(d_tr2_all_3$trt)
-prep_tr2_all_3 <- bal.tab(fmla_all, data = d_tr2_all_3, weights = d_tr2_all_3$wt_trunc,
-                          estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                          un = TRUE, stats = "mean.diffs")
-p_tr2_all_3 <- love.plot(prep_tr2_all_3, stat = "mean.diffs", stars = "none",
-                         thresholds = c(m = 0.1), abs = FALSE,
-                         var.names = VAR_LABELS,
-                         sample.names = c("Before", "After"), position = "bottom", line = FALSE,
-                         colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "bottom", legend.box = "horizontal")
-
-# Stack panels horizontally for all-interruptions
-row_tr2_all <- p_tr2_all_1 + plot_spacer() + p_tr2_all_2 + plot_spacer() + p_tr2_all_3 +
-  plot_layout(widths = c(1, 0.05, 1, 0.05, 1), guides = "collect")
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ASSEMBLE TRIAL 2 FIGURE
-# ═════════════════════════════════════════════════════════════════════════════
-
-plot_tr2_combined <- plot_spacer() /
-  row_tr2_first /
-  plot_spacer() /
-  row_tr2_ep /
-  plot_spacer() /
-  row_tr2_all +
-  plot_layout(heights = c(0.04, 1, 0.02, 1, 0.02, 1)) &
-  theme(legend.position = "bottom", legend.box = "horizontal")
-
-plot_tr2_final <- ggdraw(plot_tr2_combined) +
-  draw_label("A. Methadone interruption of 3-4 days: First-in-life",
-             x = 0.02, y = 0.97, hjust = 0, vjust = 0, size = 14) +
-  draw_label("B. Methadone interruption of 3-4 days: First-in-episode (safety check)",
-             x = 0.02, y = 0.63, hjust = 0, vjust = 0, size = 14) +
-  draw_label("C. Methadone interruption of 3-4 days: All-interruptions",
-             x = 0.02, y = 0.31, hjust = 0, vjust = 0, size = 14) +
+# Save figure for Trial 2, First-interruption-in-first-episode
+plot_tr2_first_final <- ggdraw(row_tr2_first) +
+  draw_label("A. Methadone interruption of 3-4 days: First-interruption-in-first-episode",
+             x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
   draw_label("Note: SMD ≥ 0.1 included in outcome models. * ≤40mg methadone",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
-jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr2.jpg"),
-     width = 5200, height = 6800, res = 300)
-print(plot_tr2_final)
+jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr2_first.jpg"),
+     width = 4200, height = 2200, res = 300)
+print(plot_tr2_first_final)
 dev.off()
 
-cat("  ✓ Trial 2 SMD figure saved.\n")
+cat("  ✓ Trial 2, First-interruption-in-first-episode SMD figure saved.\n")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TRIAL 3 (5-14 DAYS)
-# ═════════════════════════════════════════════════════════════════════════════
+### First-interruption-in-any-episode #########
+cat("  Creating SMD plots: First-interruption-in-any-episode\n")
 
-# ── FIRST-IN-LIFE ──
-cat("    Trial 3, First-in-life...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ow.rds"))
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds")) 
+
+dat <- ps_fit$data_weights |>
+  mutate(
+    trt = recode(trt,
+                 "no reversion"       = "No dose change",
+                 "1-<50%"             = "1-<50% reduction",
+                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 "increase"           = "Dose increase"),
+    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
+    prior_episode = as.numeric(prior_episode)
+  )
+
+fmla <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_episode"), collapse = " + ")))
+
+# Panel 1
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
+  labs(x = "", y = "", color = "", shape = "", title = "1-<50% reduction\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
+        panel.grid = element_blank(), axis.line = element_line(color = "black"),
+        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 10),
+        legend.position = "none")
+
+# Panel 2
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
+        panel.grid = element_blank(), axis.line = element_line(color = "black"),
+        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_blank(),
+        legend.position = "none")
+
+# Panel 3
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_3 <- love.plot(prep_3, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
+  labs(x = "", y = "", color = "", shape = "", title = "Dose increase\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
+        panel.grid = element_blank(), axis.line = element_line(color = "black"),
+        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_blank(),
+        legend.position = "none")
+
+row_tr2_all <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 +
+  plot_layout(widths = c(1, 0.05, 1, 0.05, 1))
+
+row_tr2_all <- plot_spacer() + row_tr2_all + plot_layout(heights = c(0.05, 1))
+
+plot_tr2_all_final <- ggdraw(row_tr2_all) +
+  draw_label("B. Methadone interruption of 3-4 days: First-interruption-in-any-episode",
+             x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
+  draw_label("Note: SMD ≥ 0.1 included in outcome models. * ≤40mg methadone",
+             x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
+
+jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr2_all.jpg"),
+     width = 4200, height = 2200, res = 300)
+print(plot_tr2_all_final)
+dev.off()
+
+cat("  ✓ Trial 2, First-interruption-in-any-episode SMD figure saved.\n")
+
+
+## MET interruption of 5-14 days #############
+
+cat("\nTrial 3 (5-14 days)...\n")
+
+### First-interruption-in-first-episode #########
+cat("  Creating SMD plots: First-interruption-in-first-episode\n")
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
 dat <- ps_fit$data_weights |>
   mutate(
     trt = recode(trt,
@@ -836,261 +650,187 @@ dat <- ps_fit$data_weights |>
 
 fmla <- as.formula(paste("trt ~", paste(baselinevars, collapse = " + ")))
 
-# Panel 1: (WITH y-axis labels)
-d_tr3_first_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
-d_tr3_first_1$trt <- droplevels(d_tr3_first_1$trt)
-prep_tr3_first_1 <- bal.tab(fmla, data = d_tr3_first_1, weights = d_tr3_first_1$wt_trunc,
-                            estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                            un = TRUE, stats = "mean.diffs")
-p_tr3_first_1 <- love.plot(prep_tr3_first_1, stat = "mean.diffs", stars = "none",
-                           thresholds = c(m = 0.1), abs = FALSE,
-                           var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                           sample.names = c("Before", "After"), position = "none", line = FALSE,
-                           colors = c("black", "red"), shapes = c(16, 16)) +
+# Panel 1: 1-<50% vs no change (WITH y-axis labels)
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% baselinevars],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
+  labs(x = "", y = "", color = "", shape = "", title = "1-<50% reduction\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
         axis.text.x = element_text(color = "black", size = 11),
         axis.text.y = element_text(color = "black", size = 10),
         legend.position = "none")
 
-# Panel 2: (NO y-axis labels)
-d_tr3_first_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
-d_tr3_first_2$trt <- droplevels(d_tr3_first_2$trt)
-prep_tr3_first_2 <- bal.tab(fmla, data = d_tr3_first_2, weights = d_tr3_first_2$wt_trunc,
-                            estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                            un = TRUE, stats = "mean.diffs")
-p_tr3_first_2 <- love.plot(prep_tr3_first_2, stat = "mean.diffs", stars = "none",
-                           thresholds = c(m = 0.1), abs = FALSE,
-                           var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                           sample.names = c("Before", "After"), position = "none", line = FALSE,
-                           colors = c("black", "red"), shapes = c(16, 16)) +
+# Panel 2: >=50% vs no change (NO y-axis labels)
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% baselinevars],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
         axis.text.x = element_text(color = "black", size = 11),
         axis.text.y = element_blank(),
         legend.position = "none")
 
-# Panel 3: (NO y-axis labels)
-d_tr3_first_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
-d_tr3_first_3$trt <- droplevels(d_tr3_first_3$trt)
-prep_tr3_first_3 <- bal.tab(fmla, data = d_tr3_first_3, weights = d_tr3_first_3$wt_trunc,
-                            estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                            un = TRUE, stats = "mean.diffs")
-p_tr3_first_3 <- love.plot(prep_tr3_first_3, stat = "mean.diffs", stars = "none",
-                           thresholds = c(m = 0.1), abs = FALSE,
-                           var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                           sample.names = c("Before", "After"), position = "none", line = FALSE,
-                           colors = c("black", "red"), shapes = c(16, 16)) +
+# Panel 3: Increase vs no change (NO y-axis labels)
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_3 <- love.plot(prep_3, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% baselinevars],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
+  labs(x = "", y = "", color = "", shape = "", title = "Dose increase\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
         axis.text.x = element_text(color = "black", size = 11),
         axis.text.y = element_blank(),
         legend.position = "none")
 
-row_tr3_first <- p_tr3_first_1 + plot_spacer() + p_tr3_first_2 + plot_spacer() + p_tr3_first_3 +
+row_tr3_first <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 +
   plot_layout(widths = c(1, 0.05, 1, 0.05, 1))
 
-# ── FIRST-IN-EPISODE (safety check) ──
-cat("    Trial 3, First-in-episode (safety)...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ep_ow.rds"))
-dat <- ps_fit$data_weights |>
-  mutate(
-    trt = recode(trt,
-                 "no reversion"       = "No dose change",
-                 "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
-                 "increase"           = "Dose increase"),
-    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
-  )
+row_tr3_first <- plot_spacer()/row_tr3_first + plot_layout(heights = c(0.05, 1))
 
-# Panel 1: (WITH y-axis labels)
-d_tr3_ep_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
-d_tr3_ep_1$trt <- droplevels(d_tr3_ep_1$trt)
-prep_tr3_ep_1 <- bal.tab(fmla, data = d_tr3_ep_1, weights = d_tr3_ep_1$wt_trunc,
-                         estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                         un = TRUE, stats = "mean.diffs")
-p_tr3_ep_1 <- love.plot(prep_tr3_ep_1, stat = "mean.diffs", stars = "none",
-                        thresholds = c(m = 0.1), abs = FALSE,
-                        var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                        sample.names = c("Before", "After"), position = "none", line = FALSE,
-                        colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_text(color = "black", size = 10),
-        legend.position = "none")
-
-# Panel 2: (NO y-axis labels)
-d_tr3_ep_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
-d_tr3_ep_2$trt <- droplevels(d_tr3_ep_2$trt)
-prep_tr3_ep_2 <- bal.tab(fmla, data = d_tr3_ep_2, weights = d_tr3_ep_2$wt_trunc,
-                         estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                         un = TRUE, stats = "mean.diffs")
-p_tr3_ep_2 <- love.plot(prep_tr3_ep_2, stat = "mean.diffs", stars = "none",
-                        thresholds = c(m = 0.1), abs = FALSE,
-                        var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                        sample.names = c("Before", "After"), position = "none", line = FALSE,
-                        colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "none")
-
-# Panel 3: (NO y-axis labels)
-d_tr3_ep_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
-d_tr3_ep_3$trt <- droplevels(d_tr3_ep_3$trt)
-prep_tr3_ep_3 <- bal.tab(fmla, data = d_tr3_ep_3, weights = d_tr3_ep_3$wt_trunc,
-                         estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                         un = TRUE, stats = "mean.diffs")
-p_tr3_ep_3 <- love.plot(prep_tr3_ep_3, stat = "mean.diffs", stars = "none",
-                        thresholds = c(m = 0.1), abs = FALSE,
-                        var.names = VAR_LABELS[names(VAR_LABELS) != "prior_gap"],
-                        sample.names = c("Before", "After"), position = "none", line = FALSE,
-                        colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "none")
-
-row_tr3_ep <- p_tr3_ep_1 + plot_spacer() + p_tr3_ep_2 + plot_spacer() + p_tr3_ep_3 +
-  plot_layout(widths = c(1, 0.05, 1, 0.05, 1))
-
-# ── ALL-INTERRUPTIONS ──
-cat("    Trial 3, All-interruptions...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"))
-dat <- ps_fit$data_weights |>
-  mutate(
-    trt = recode(trt,
-                 "no reversion"       = "No dose change",
-                 "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
-                 "increase"           = "Dose increase"),
-    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
-  )
-
-fmla_all <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_gap"), collapse = " + ")))
-
-# Panel 1: (WITH y-axis labels)
-d_tr3_all_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
-d_tr3_all_1$trt <- droplevels(d_tr3_all_1$trt)
-prep_tr3_all_1 <- bal.tab(fmla_all, data = d_tr3_all_1, weights = d_tr3_all_1$wt_trunc,
-                          estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                          un = TRUE, stats = "mean.diffs")
-p_tr3_all_1 <- love.plot(prep_tr3_all_1, stat = "mean.diffs", stars = "none",
-                         thresholds = c(m = 0.1), abs = FALSE,
-                         var.names = VAR_LABELS,
-                         sample.names = c("Before", "After"), position = "none", line = FALSE,
-                         colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_text(color = "black", size = 10),
-        legend.position = "bottom", legend.box = "horizontal")
-
-# Panel 2: (NO y-axis labels)
-d_tr3_all_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
-d_tr3_all_2$trt <- droplevels(d_tr3_all_2$trt)
-prep_tr3_all_2 <- bal.tab(fmla_all, data = d_tr3_all_2, weights = d_tr3_all_2$wt_trunc,
-                          estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                          un = TRUE, stats = "mean.diffs")
-p_tr3_all_2 <- love.plot(prep_tr3_all_2, stat = "mean.diffs", stars = "none",
-                         thresholds = c(m = 0.1), abs = FALSE,
-                         var.names = VAR_LABELS,
-                         sample.names = c("Before", "After"), position = "none", line = FALSE,
-                         colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "none")
-
-# Panel 3: (NO y-axis labels)
-d_tr3_all_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
-d_tr3_all_3$trt <- droplevels(d_tr3_all_3$trt)
-prep_tr3_all_3 <- bal.tab(fmla_all, data = d_tr3_all_3, weights = d_tr3_all_3$wt_trunc,
-                          estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
-                          un = TRUE, stats = "mean.diffs")
-p_tr3_all_3 <- love.plot(prep_tr3_all_3, stat = "mean.diffs", stars = "none",
-                         thresholds = c(m = 0.1), abs = FALSE,
-                         var.names = VAR_LABELS,
-                         sample.names = c("Before", "After"), position = "bottom", line = FALSE,
-                         colors = c("black", "red"), shapes = c(16, 16)) +
-  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "") +
-  theme(title = element_text(color = "black", size = 12, face = "bold"),
-        panel.grid = element_blank(), axis.line = element_line(color = "black"),
-        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-        axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_blank(),
-        legend.position = "bottom", legend.box = "horizontal")
-
-row_tr3_all <- p_tr3_all_1 + plot_spacer() + p_tr3_all_2 + plot_spacer() + p_tr3_all_3 +
-  plot_layout(widths = c(1, 0.05, 1, 0.05, 1), guides = "collect")
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ASSEMBLE TRIAL 3 FIGURE
-# ═════════════════════════════════════════════════════════════════════════════
-
-plot_tr3_combined <- plot_spacer() /
-  row_tr3_first /
-  plot_spacer() /
-  row_tr3_ep /
-  plot_spacer() /
-  row_tr3_all +
-  plot_layout(heights = c(0.04, 1, 0.02, 1, 0.02, 1)) &
-  theme(legend.position = "bottom", legend.box = "horizontal")
-
-plot_tr3_final <- ggdraw(plot_tr3_combined) +
-  draw_label("A. Methadone interruption of 5-14 days: First-in-life",
-             x = 0.02, y = 0.97, hjust = 0, vjust = 0, size = 14) +
-  draw_label("B. Methadone interruption of 5-14 days: First-in-episode (safety check)",
-             x = 0.02, y = 0.63, hjust = 0, vjust = 0, size = 14) +
-  draw_label("C. Methadone interruption of 5-14 days: All-interruptions",
-             x = 0.02, y = 0.31, hjust = 0, vjust = 0, size = 14) +
+# Save figure for Trial 2, First-interruption-in-first-episode
+plot_tr3_first_final <- ggdraw(row_tr3_first) +
+  draw_label("A. Methadone interruption of 5-14 days: First-interruption-in-first-episode",
+             x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
   draw_label("Note: SMD ≥ 0.1 included in outcome models. * ≤40mg methadone",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
-jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr3.jpg"),
-     width = 5200, height = 6800, res = 300)
-print(plot_tr3_final)
+jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr3_first.jpg"),
+     width = 4200, height = 2200, res = 300)
+print(plot_tr3_first_final)
 dev.off()
 
-cat("  ✓ Trial 3 SMD figure saved.\n")
+cat("  ✓ Trial 2, First-interruption-in-first-episode SMD figure saved.\n")
+
+### First-interruption-in-any-episode #########
+cat("  Creating SMD plots: First-interruption-in-any-episode\n")
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds")) 
+
+dat <- ps_fit$data_weights |>
+  mutate(
+    trt = recode(trt,
+                 "no reversion"       = "No dose change",
+                 "1-<50%"             = "1-<50% reduction",
+                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 "increase"           = "Dose increase"),
+    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
+    prior_episode = as.numeric(prior_episode)
+  )
+
+fmla <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_episode"), collapse = " + ")))
+
+# Panel 1
+d_1 <- subset(dat, trt %in% c("No dose change", "1-<50% reduction"))
+d_1$trt <- droplevels(d_1$trt)
+prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
+  labs(x = "", y = "", color = "", shape = "", title = "1-<50% reduction\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
+        panel.grid = element_blank(), axis.line = element_line(color = "black"),
+        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 10),
+        legend.position = "none")
+
+# Panel 2
+d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2$trt <- droplevels(d_2$trt)
+prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
+        panel.grid = element_blank(), axis.line = element_line(color = "black"),
+        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_blank(),
+        legend.position = "none")
+
+# Panel 3
+d_3 <- subset(dat, trt %in% c("No dose change", "Dose increase"))
+d_3$trt <- droplevels(d_3$trt)
+prep_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc,
+                  estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
+                  un = TRUE, stats = "mean.diffs")
+p_3 <- love.plot(prep_3, stat = "mean.diffs", stars = "none",
+                 thresholds = c(m = 0.1), abs = FALSE,
+                 var.names = VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")],
+                 sample.names = c("Before", "After"), position = "none", line = FALSE,
+                 colors = c("black", "red"), shapes = c(16, 16)) +
+  geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
+  labs(x = "", y = "", color = "", shape = "", title = "Dose increase\nvs\nno change") +
+  theme(title = element_text(color = "black", size = 12),
+        panel.grid = element_blank(), axis.line = element_line(color = "black"),
+        axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_blank(),
+        legend.position = "none")
+
+row_tr3_all <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 +
+  plot_layout(widths = c(1, 0.05, 1, 0.05, 1))
+
+row_tr3_all <- plot_spacer() + row_tr3_all + plot_layout(heights = c(0.05, 1))
+
+plot_tr3_all_final <- ggdraw(row_tr3_all) +
+  draw_label("B. Methadone interruption of 5-14 days: First-interruption-in-any-episode",
+             x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
+  draw_label("Note: SMD ≥ 0.1 included in outcome models. * ≤40mg methadone",
+             x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
+
+jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr3_all.jpg"),
+     width = 4200, height = 2200, res = 300)
+print(plot_tr3_all_final)
+dev.off()
+
+cat("  ✓ Trial 2, First-interruption-in-any-episode SMD figure saved.\n")
+
 
 
 # 6. CUMULATIVE INCIDENCE ####
