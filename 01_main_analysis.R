@@ -834,23 +834,37 @@ cat("  ✓ Trial 2, First-interruption-in-any-episode SMD figure saved.\n")
 
 
 # 6. CUMULATIVE INCIDENCE ####
+# Risk curves and confidence intervals for overdose and discontinuation
+# Two trials × Two cohorts
+
+cat("\n=== Computing Cumulative Incidence ===\n")
+
 HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
 HORIZONS_CI    <- c(30, 60, 90, 180, 365)
 
+# ── INITIALIZE RESULTS STRUCTURE ──
+
 risk <- list(
-  tr2 = list(first = list(od = list(), dis = list()),
-             first_ep = list(od = list(), dis = list()),
-             all   = list(od = list(), dis = list())),
-  tr3 = list(first = list(od = list(), dis = list()),
-             first_ep = list(od = list(), dis = list()),
-             all   = list(od = list(), dis = list()))
+  tr2 = list(
+    first = list(od = list(), dis = list()),
+    all = list(od = list(), dis = list())
+  ),
+  tr3 = list(
+    first = list(od = list(), dis = list()),
+    all = list(od = list(), dis = list())
+  )
 )
 
+## MET interruption of 3-4 days #############
 
-## MET 3-4 days / first-interruption ######
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ow.rds"))
+cat("\nTrial 2 (3-4 days)...\n")
 
-## Overdose
+### FIRST-INTERRUPTION-IN-FIRST-EPISODE ####
+cat("  Computing: First-interruption-in-first-episode\n")
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
+
+# Overdose
 long_dat <- expand_person_period(ps_fit$data_weights,
                                  time_var  = "time_od_acute",
                                  event_var = "sens_od_acute",
@@ -858,7 +872,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr2$first$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = NULL,
+  covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -866,13 +880,13 @@ risk$tr2$first$od$curve <- predict_cuminc(
 
 risk$tr2$first$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = NULL,
+  covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 199, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
-## Discontinuation
+# Discontinuation
 long_dat <- expand_person_period(ps_fit$data_weights,
                                  time_var  = "time_discont",
                                  event_var = "sens_discont",
@@ -880,7 +894,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr2$first$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = NULL,
+  covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -888,7 +902,7 @@ risk$tr2$first$dis$curve <- predict_cuminc(
 
 risk$tr2$first$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = NULL,
+  covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 199, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -896,10 +910,10 @@ risk$tr2$first$dis$ci <- predict_cuminc(
 
 rm(long_dat); gc()
 
+### FIRST-INTERRUPTION-IN-ANY-EPISODE ####
+cat("  Computing: First-interruption-in-any-episode\n")
 
-## MET 3-4 days / first-in-episode ######
-
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first_ep_ow.rds"))
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
 
 # Overdose
 long_dat <- expand_person_period(ps_fit$data_weights, 
@@ -907,10 +921,10 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_od_acute", 
                                  interval_length = 14)
 
-risk$tr2$first_ep$od$curve <- predict_cuminc(
+risk$tr2$all$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
-  covs = "ddose_prev", 
+  covs = c("ddose_prev", "prior_episode"), 
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
   samples = 199, 
@@ -918,10 +932,11 @@ risk$tr2$first_ep$od$curve <- predict_cuminc(
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
 )
-risk$tr2$first_ep$od$ci <- predict_cuminc(
+
+risk$tr2$all$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
-  covs = NULL, 
+  covs = c("ddose_prev", "prior_episode"), 
   horizons = HORIZONS_CI,
   cluster_var = "studyid_rev", 
   samples = 199, 
@@ -936,10 +951,10 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_discont", 
                                  interval_length = 14)
 
-risk$tr2$first_ep$dis$curve <- predict_cuminc(
+risk$tr2$all$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat,
   trt_var = "trt", 
-  covs = NULL, 
+  covs =c("ddose_prev", "prior_episode"),  
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
   samples = 199, 
@@ -947,10 +962,11 @@ risk$tr2$first_ep$dis$curve <- predict_cuminc(
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
 )
-risk$tr2$first_ep$dis$ci <- predict_cuminc(
+
+risk$tr2$all$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
-  covs = NULL, 
+  covs = c("ddose_prev", "prior_episode"),
   horizons = HORIZONS_CI,
   cluster_var = "studyid_rev", 
   samples = 199, 
@@ -958,67 +974,23 @@ risk$tr2$first_ep$dis$ci <- predict_cuminc(
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
 )
-rm(long_dat); gc()
-
-
-
-## MET 3-4 days / all-interruptions #######
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all_ow.rds"))
-
-## Overdose
-long_dat <- expand_person_period(ps_fit$data_weights,
-                                 time_var  = "time_od_acute",
-                                 event_var = "sens_od_acute",
-                                 interval_length = 14)
-
-risk$tr2$all$od$curve <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
-  horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
-  wt_type = "ow_wt_trunc"
-)
-
-risk$tr2$all$od$ci <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
-  horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
-  wt_type = "ow_wt_trunc"
-)
-
-## Discontinuation
-long_dat <- expand_person_period(ps_fit$data_weights,
-                                 time_var  = "time_discont",
-                                 event_var = "sens_discont",
-                                 interval_length = 14)
-
-risk$tr2$all$dis$curve <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = "ddose_prev",
-  horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
-  wt_type = "wt_trunc"
-)
-
-risk$tr2$all$dis$ci <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = "ddose_prev",
-  horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
-  wt_type = "wt_trunc"
-)
 
 rm(long_dat); gc()
 
 saveRDS(risk$tr2, paste0(RES_DIR, "Risk/", "risk_tr2_34d.rds"))
 
+cat("  ✓ Trial 2 risk estimates saved.\n")
 
+## MET interruption of 5-14 days #############
 
-## MET 5-14 days / first-interruption ######
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ow.rds"))
+cat("\nTrial 3 (5-14 days)...\n")
 
-## Overdose
+### FIRST-INTERRUPTION-IN-FIRST-EPISODE ####
+cat("  Computing: First-interruption-in-first-episode\n")
+
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
+
+# Overdose
 long_dat <- expand_person_period(ps_fit$data_weights,
                                  time_var  = "time_od_acute",
                                  event_var = "sens_od_acute",
@@ -1026,7 +998,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr3$first$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
+  covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1034,13 +1006,13 @@ risk$tr3$first$od$curve <- predict_cuminc(
 
 risk$tr3$first$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
+  covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 199, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
-## Discontinuation
+# Discontinuation
 long_dat <- expand_person_period(ps_fit$data_weights,
                                  time_var  = "time_discont",
                                  event_var = "sens_discont",
@@ -1048,7 +1020,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr3$first$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
+  covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1056,7 +1028,7 @@ risk$tr3$first$dis$curve <- predict_cuminc(
 
 risk$tr3$first$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
+  covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 199, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1064,58 +1036,12 @@ risk$tr3$first$dis$ci <- predict_cuminc(
 
 rm(long_dat); gc()
 
-## MET 5-14 days / first-in-episode ######
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first_ep_ow.rds"))
+### FIRST-INTERRUPTION-IN-ANY-EPISODE ####
+cat("  Computing: First-interruption-in-any-episode\n")
 
-## Overdose
-long_dat <- expand_person_period(ps_fit$data_weights,
-                                 time_var  = "time_od_acute",
-                                 event_var = "sens_od_acute",
-                                 interval_length = 14)
+ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
 
-risk$tr3$first_ep$od$curve <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
-  horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
-  wt_type = "wt_trunc"
-)
-
-risk$tr3$first_ep$od$ci <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
-  horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
-  wt_type = "wt_trunc"
-)
-
-## Discontinuation
-long_dat <- expand_person_period(ps_fit$data_weights,
-                                 time_var  = "time_discont",
-                                 event_var = "sens_discont",
-                                 interval_length = 7)
-
-risk$tr3$first_ep$dis$curve <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
-  horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
-  wt_type = "wt_trunc"
-)
-
-risk$tr3$first_ep$dis$ci <- predict_cuminc(
-  Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev"),
-  horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
-  wt_type = "wt_trunc"
-)
-
-
-##  MET 5-14 days / all-interruptions ######
-ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all_ow.rds"))
-
-## Overdose
+# Overdose
 long_dat <- expand_person_period(ps_fit$data_weights,
                                  time_var  = "time_od_acute",
                                  event_var = "sens_od_acute",
@@ -1123,7 +1049,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr3$all$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev", "prior_gap"),
+  covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1131,21 +1057,21 @@ risk$tr3$all$od$curve <- predict_cuminc(
 
 risk$tr3$all$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev", "prior_gap"),
+  covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 199, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
-## Discontinuation
+# Discontinuation
 long_dat <- expand_person_period(ps_fit$data_weights,
                                  time_var  = "time_discont",
                                  event_var = "sens_discont",
-                                 interval_length = 7)
+                                 interval_length = 14)
 
 risk$tr3$all$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev", "prior_gap"),
+  covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 199, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1153,7 +1079,7 @@ risk$tr3$all$dis$curve <- predict_cuminc(
 
 risk$tr3$all$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("ddose_prev", "prior_gap"),
+  covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 199, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1161,8 +1087,7 @@ risk$tr3$all$dis$ci <- predict_cuminc(
 
 rm(long_dat); gc()
 
-saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3.rds"))
+saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d.rds"))
 
-
-
+cat("  ✓ Trial 3 risk estimates saved.\n")
 
