@@ -238,7 +238,7 @@ for (nm in c("tr2_first", "tr2_all", "tr3_first", "tr3_all")) {
 
 saveWorkbook(wb, paste0(RES_DIR, "Tables/", "table1.xlsx"), overwrite = TRUE)
 
-# EXPORT SMD for TABLE1 - WIDE FORMAT #############
+## EXPORT SMD for TABLE1 - WIDE FORMAT #############
 
 cat("\n=== Extracting SMD Results and Creating Excel Summary (Wide Format) ===\n")
 
@@ -1273,11 +1273,12 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_od_acute",
                                  interval_length = 14)
 
+
 risk$tr2$first$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1285,7 +1286,7 @@ risk$tr2$first$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1299,7 +1300,7 @@ risk$tr2$first$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1307,7 +1308,7 @@ risk$tr2$first$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1330,7 +1331,7 @@ risk$tr2$all$od$curve <- predict_cuminc(
   covs = c("ddose_prev", "prior_episode"), 
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
-  samples = 199, 
+  samples = 499, 
   conf_int = FALSE,
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
@@ -1342,7 +1343,7 @@ risk$tr2$all$od$ci <- predict_cuminc(
   covs = c("ddose_prev", "prior_episode"), 
   horizons = HORIZONS_CI,
   cluster_var = "studyid_rev", 
-  samples = 199, 
+  samples = 499, 
   conf_int = TRUE,
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
@@ -1360,7 +1361,7 @@ risk$tr2$all$dis$curve <- predict_cuminc(
   covs =c("ddose_prev", "prior_episode"),  
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
-  samples = 199, 
+  samples = 499, 
   conf_int = FALSE,
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
@@ -1372,7 +1373,7 @@ risk$tr2$all$dis$ci <- predict_cuminc(
   covs = c("ddose_prev", "prior_episode"),
   horizons = HORIZONS_CI,
   cluster_var = "studyid_rev", 
-  samples = 199, 
+  samples = 499, 
   conf_int = TRUE,
   ref_group = "no reversion", 
   wt_type = "wt_trunc"
@@ -1403,7 +1404,7 @@ risk$tr3$first$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1411,7 +1412,7 @@ risk$tr3$first$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1425,7 +1426,7 @@ risk$tr3$first$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1434,7 +1435,7 @@ risk$tr3$first$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1455,7 +1456,7 @@ risk$tr3$all$od$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1463,7 +1464,7 @@ risk$tr3$all$od$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1477,7 +1478,7 @@ risk$tr3$all$dis$curve <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
-  samples = 199, conf_int = FALSE, ref_group = "no reversion",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 
@@ -1485,7 +1486,7 @@ risk$tr3$all$dis$ci <- predict_cuminc(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
-  samples = 199, conf_int = TRUE, ref_group = "no reversion",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
 

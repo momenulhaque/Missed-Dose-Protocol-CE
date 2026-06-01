@@ -309,7 +309,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ddose_prev", "ret_length"),
     horizons = HORIZONS_CURVE,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = FALSE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -321,7 +321,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ddose_prev", "ret_length"),
     horizons = HORIZONS_CI,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = TRUE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -342,7 +342,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ret_length"),
     horizons = HORIZONS_CURVE,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = FALSE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -354,7 +354,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ret_length"),
     horizons = HORIZONS_CI,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = TRUE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -394,7 +394,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ddose_prev", "ret_length"),
     horizons = HORIZONS_CURVE,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = FALSE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -406,7 +406,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ddose_prev", "ret_length"),
     horizons = HORIZONS_CI,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = TRUE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -427,7 +427,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ret_length"),
     horizons = HORIZONS_CURVE,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = FALSE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"
@@ -439,7 +439,7 @@ for (stratum in STRATA_LEVELS) {
     covs = c("ret_length"),
     horizons = HORIZONS_CI,
     cluster_var = "studyid_rev",
-    samples = 199,
+    samples = 499,
     conf_int = TRUE,
     ref_group = "no reversion",
     wt_type = "wt_trunc"

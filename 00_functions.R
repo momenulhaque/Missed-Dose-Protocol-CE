@@ -166,9 +166,6 @@ ps_model_lasso <- function(dat, exposure = "trt",
 }
 
 
-ps_rds = paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds")
-names(dat)
-dat %>% count(trt)
 
 make_table1 <- function(ps_rds, bvars, cont_vars, clustered = FALSE) {
   
