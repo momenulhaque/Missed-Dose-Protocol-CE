@@ -271,7 +271,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
   )
@@ -291,7 +291,7 @@ smd_tr2_first_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<5
 
 
 # >=50% vs no change
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -363,7 +363,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
     prior_episode = as.numeric(prior_episode)
@@ -382,7 +382,7 @@ prep_1 <- bal.tab(fmla_ep, data = d_1, weights = d_1$wt_trunc,
 smd_tr2_ep_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
 
 # >=50% vs no change
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla_ep, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -451,7 +451,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
   )
@@ -469,7 +469,7 @@ prep_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc,
 smd_tr3_first_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
 
 # >=50% vs no change
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -536,7 +536,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
     prior_episode = as.numeric(prior_episode)
@@ -555,7 +555,7 @@ prep_1 <- bal.tab(fmla_ep, data = d_1, weights = d_1$wt_trunc,
 smd_tr3_ep_list[["1-<50% vs no change"]] <- extract_smd_results(prep_1, "1-<50% vs no change")
 
 # >=50% vs no change
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla_ep, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -649,7 +649,7 @@ COMPARISON_COLORS <- c(
   "No dose change"              = "#000000", 
    "Dose increase"               = "#D62728",  
   "1-<50% reduction"            = "#2CA02C",  
-  ">=50% reduction/initial dose*"  = "#FF7F0E"  
+  "≥50% reduction/≤40mg"  = "#FF7F0E"  
 )
 
 
@@ -695,9 +695,11 @@ prep_ps_dat <- function(ps_rds, trial_label, design_label) {
       group = recode(as.character(trt),
                      "no reversion" = "No dose change",
                      "1-<50%"    = "1-<50% reduction",
-                     ">=50%/<=40mg" = ">=50% reduction/initial dose*",
+                     ">=50%/<=40mg" = "≥50% reduction/≤40mg",
                      "increase"     = "Dose increase"),
-      group  = factor(group, levels = c("No dose change", "1-<50% reduction", ">=50% reduction/initial dose*", "Dose increase")),
+      group  = factor(group, 
+                      levels = c("No dose change", "1-<50% reduction", 
+                                 "≥50% reduction/≤40mg", "Dose increase")),
       Trial  = trial_label,
       Design = design_label
     ) |>
@@ -728,7 +730,7 @@ dat_ps <- bind_rows(
   )
 
 plot_ps <- ps_score_plot(dat_ps) +
-  guides(color = guide_legend(nrow = 2))
+  guides(color = guide_legend(nrow = 1))
 
 jpeg(paste0(RES_DIR, "Figures/", "ps_distribution.jpg"),
      width = 5500, height = 4200, res = 300)
@@ -750,7 +752,7 @@ COMPARISON_COLORS <- c(
   "No dose change"              = "#000000", 
   "Dose increase"               = "#D62728",  
   "1-<50% reduction"            = "#2CA02C",  
-  ">=50% reduction/initial dose*" = "#FF7F0E"  
+  "≥50% reduction/≤40mg" = "#FF7F0E"  
 )
 
 # Global settings for love plots
@@ -844,7 +846,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
   )
@@ -873,7 +875,7 @@ p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
         legend.position = "none")
 
 # Panel 2: >=50% vs no change (NO y-axis labels)
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -885,7 +887,7 @@ p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
                  colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/≤40mg\nvs\nno change") +
   theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
@@ -943,7 +945,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
     prior_episode = as.numeric(prior_episode)
@@ -973,7 +975,7 @@ p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
         legend.position = "none")
 
 # Panel 2
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -985,7 +987,7 @@ p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
                  colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/≤40mg\nvs\nno change") +
   theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
@@ -1022,7 +1024,7 @@ row_tr2_all <- plot_spacer() + row_tr2_all + plot_layout(heights = c(0.05, 1))
 plot_tr2_all_final <- ggdraw(row_tr2_all) +
   draw_label("B. Methadone interruption of 3-4 days: First-interruption-in-any-episode",
              x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
-  draw_label("Note: SMD ≥ 0.1 included in outcome models. * ≤40mg methadone",
+  draw_label("Note: SMD ≥ 0.1 included in outcome models.",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
 jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr2_all.jpg"),
@@ -1046,7 +1048,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0)
   )
@@ -1075,7 +1077,7 @@ p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
         legend.position = "none")
 
 # Panel 2: >=50% vs no change (NO y-axis labels)
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -1087,7 +1089,7 @@ p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
                  colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/≤40mg\nvs\nno change") +
   theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
@@ -1145,7 +1147,7 @@ dat <- ps_fit$data_weights |>
     trt = recode(trt,
                  "no reversion"       = "No dose change",
                  "1-<50%"             = "1-<50% reduction",
-                 ">=50%/<=40mg"       = ">=50% reduction/initial dose*",
+                 ">=50%/<=40mg"       = "≥50% reduction/≤40mg",
                  "increase"           = "Dose increase"),
     incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
     prior_episode = as.numeric(prior_episode)
@@ -1175,7 +1177,7 @@ p_1 <- love.plot(prep_1, stat = "mean.diffs", stars = "none",
         legend.position = "none")
 
 # Panel 2
-d_2 <- subset(dat, trt %in% c("No dose change", ">=50% reduction/initial dose*"))
+d_2 <- subset(dat, trt %in% c("No dose change", "≥50% reduction/≤40mg"))
 d_2$trt <- droplevels(d_2$trt)
 prep_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc,
                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled",
@@ -1187,7 +1189,7 @@ p_2 <- love.plot(prep_2, stat = "mean.diffs", stars = "none",
                  colors = c("black", "red"), shapes = c(16, 16)) +
   geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
   scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/initial dose*\nvs\nno change") +
+  labs(x = "", y = "", color = "", shape = "", title = "≥50% reduction/≤40mg\nvs\nno change") +
   theme(title = element_text(color = "black", size = 12),
         panel.grid = element_blank(), axis.line = element_line(color = "black"),
         axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
@@ -1224,7 +1226,7 @@ row_tr3_all <- plot_spacer() + row_tr3_all + plot_layout(heights = c(0.05, 1))
 plot_tr3_all_final <- ggdraw(row_tr3_all) +
   draw_label("B. Methadone interruption of 5-14 days: First-interruption-in-any-episode",
              x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
-  draw_label("Note: SMD ≥ 0.1 included in outcome models. * ≤40mg methadone",
+  draw_label("Note: SMD ≥ 0.1 included in outcome models",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
 jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr3_all.jpg"),
