@@ -137,7 +137,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  interval_length = 14)
 
 max_ret <- quantile(long_dat$ret_length, 0.95, na.rm = TRUE)
-ret_seq_grid <- seq(0, max_ret, by = 5)
+ret_seq_grid <- seq(0, max_ret, by = 3)
 
 # MASTER CONTROL SWITCH
 
@@ -176,7 +176,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  interval_length = 14)
 
 max_ret <- quantile(long_dat$ret_length, 0.95, na.rm = TRUE)
-ret_seq_grid <- seq(0, max_ret, by = 5)
+ret_seq_grid <- seq(0, max_ret, by = 3)
 
 risk_em_ci_tr3_od <- predict_cuminc_em(
   Dat_expanded  = long_dat, 
@@ -209,7 +209,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  interval_length = 14)
 
 max_ret <- quantile(long_dat$ret_length, 0.95, na.rm = TRUE)
-ret_seq_grid <- seq(0, max_ret, by = 5)
+ret_seq_grid <- seq(0, max_ret, by = 3)
 
 risk_em_ci_tr2_dis <- predict_cuminc_em(
   Dat_expanded  = long_dat, 
@@ -242,7 +242,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  interval_length = 14)
 
 max_ret <- quantile(long_dat$ret_length, 0.95, na.rm = TRUE)
-ret_seq_grid <- seq(0, max_ret, by = 5)
+ret_seq_grid <- seq(0, max_ret, by = 3)
 
 risk_em_ci_tr3_dis <- predict_cuminc_em(
   Dat_expanded  = long_dat, 

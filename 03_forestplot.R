@@ -356,7 +356,7 @@ p_dis_tr2 <- forest(
 
 
 
-txt <- "Risk. cumulative incidence<br>CI. compatibility intervals"
+txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
 
 p_dis_tr2_1 <- add_grob(p_dis_tr2, 
                         row = nrow(tr2_plot)+2, 
@@ -632,7 +632,7 @@ p_dis_tr3 <- forest(
 
 
 
-txt <- "Risk. cumulative incidence<br>CI. compatibility intervals"
+txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
 
 p_dis_tr3_1 <- add_grob(p_dis_tr3, 
                         row = nrow(tr3_plot)+2, 
@@ -772,7 +772,7 @@ p_dis_tr2 <- forest(
 
 
 
-txt <- "Risk. cumulative incidence<br>CI. compatibility intervals"
+txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
 
 p_dis_tr2_1 <- add_grob(p_dis_tr2, 
                         row = nrow(tr2_plot)+2, 
@@ -913,7 +913,7 @@ p_dis_tr3 <- forest(
 
 
 
-txt <- "Risk. cumulative incidence<br>CI. compatibility intervals"
+txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
 
 p_dis_tr3_1 <- add_grob(p_dis_tr3, 
                         row = nrow(tr3_plot)+2, 
