@@ -40,6 +40,7 @@ res_valid$grp_red$incid <- fit_iv_logistic(data = dat1,
                                            spline_df = 3)
 
 
+
 dat1_prev <- readRDS(file = "E:/SAS Data/Missed dose protocol_v2/praciv_prev_m_tr1.rds") %>%
   select(all_of(c(clust_vars, out_vars, baselinevars, iv_vars, grp_vars,  "trt_p23"))) %>%
   rename(iv_var = all_of(iv_name)) %>%  
