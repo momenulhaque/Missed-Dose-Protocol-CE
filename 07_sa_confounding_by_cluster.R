@@ -218,7 +218,7 @@ bw_long <- bind_rows(bw_long) |>
 make_wide <- function(df) {
   df |>
     mutate(`1-yr cumulative incidence, % (95% CI)` = fmt_pct(risk, lo, hi)) |>
-    select(Model, trt, `1-yr cumulative incidence, % (95% CI)`) |>
+    dplyr::select(Model, trt, `1-yr cumulative incidence, % (95% CI)`) |>
     pivot_wider(names_from = Model, values_from = `1-yr cumulative incidence, % (95% CI)`)
 }
 

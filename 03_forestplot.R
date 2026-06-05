@@ -1,3 +1,6 @@
+library(tidyverse)
+library(forestploter)
+library(grid)
 # FOREST PLOT PREPARATION: Cumulative Incidence & Rates
 # Missed-dose trials: MET interruption of 3-4 days and 5-14 days
 # Outcomes: Overdose (1 month) and Discontinuation (12 months)
@@ -10,54 +13,6 @@ RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 
 # UNIFIED EXTRACTION: Absolute Risk and Risk Difference at time t
 
-extract_risk_and_rd <- function(risk_obj, timepoint = 90, ref_name = "no reversion") {
-  
-  # 1. Extract absolute risks
-  risks_t <- risk_obj$ci$risks %>%
-    filter(horizon == timepoint) %>%
-    mutate(
-      risk_pct = risk * 100,
-      risk_lower_pct = risk_lower * 100,
-      risk_upper_pct = risk_upper * 100,
-      # Format dynamically based on magnitude of the point estimate
-      abs_risk_display = ifelse(
-        abs(risk_pct) >= 10,
-        sprintf("%.1f (%.1f, %.1f)", risk_pct, risk_lower_pct, risk_upper_pct),
-        sprintf("%.2f (%.2f, %.2f)", risk_pct, risk_lower_pct, risk_upper_pct)
-      )
-    ) %>%
-    select(trt, abs_risk_display, risk_pct)
-  
-  # 2. Extract contrasts (Risk Differences)
-  contrasts_t <- risk_obj$ci$contrasts %>%
-    filter(horizon == timepoint) %>%
-    mutate(
-      rd_pct = RD * 100,
-      rd_lower_pct = RD_lower * 100,
-      rd_upper_pct = RD_upper * 100,
-      # Use absolute value to correctly format negative risk differences
-      rd_display = ifelse(
-        abs(rd_pct) >= 10,
-        sprintf("%.1f (%.1f, %.1f)", rd_pct, rd_lower_pct, rd_upper_pct),
-        sprintf("%.2f (%.2f, %.2f)", rd_pct, rd_lower_pct, rd_upper_pct)
-      )
-    ) %>%
-    select(trt, rd_pct, rd_lower_pct, rd_upper_pct, rd_display)
-  
-  # 3. Merge and handle the reference group
-  merged_data <- risks_t %>%
-    left_join(contrasts_t, by = "trt") %>%
-    mutate(
-      # The reference group will have NA for RD from the left join. Replace with "Ref."
-      rd_display = if_else(trt == ref_name, "Ref.", rd_display),
-      rd_pct = if_else(trt == ref_name, 0, rd_pct),
-      rd_lower_pct = if_else(trt == ref_name, 0, rd_lower_pct),
-      rd_upper_pct = if_else(trt == ref_name, 0, rd_upper_pct)
-    ) %>%
-    rename(trt_group = trt)
-  
-  return(merged_data)
-}
 
 
 compute_summary_stats_timewin <- function(Dat, 
@@ -90,9 +45,191 @@ compute_summary_stats_timewin <- function(Dat,
 }
 
 
+extract_rr_data <- function(risk_obj, 
+                            dat_weights, 
+                            max_time, 
+                            outcome = "od",
+                            ref_name = "no reversion", 
+                            cohort_label, 
+                            int_label) {
+  # 1. Counts
+  if(outcome == "dis"){
+    counts <- compute_summary_stats_timewin(
+      dat_weights, time_var = "time_discont", event_var = "sens_discont", 
+      weight_var = "wt_trunc", trt_var = "trt", max_time = max_time
+    ) %>% dplyr::select(trt_group = trt, Episode)
+  }
+  
+  if(outcome == "od"){
+    counts <- compute_summary_stats_timewin(
+      dat_weights, time_var = "time_od_acute", event_var = "sens_od_acute", 
+      weight_var = "wt_trunc", trt_var = "trt", max_time = max_time
+    ) %>% dplyr::select(trt_group = trt, Episode)
+  }  
+  
+  # 2. Absolute Risk
+  risks <- risk_obj$risks %>%
+    filter(horizon == max_time) %>%
+    mutate(
+      risk_pct = risk * 100,
+      abs_risk_disp = sprintf("%.2f (%.2f, %.2f)", risk * 100, risk_lower * 100, risk_upper * 100)
+    ) %>% select(trt_group = trt, abs_risk_disp)
+  
+  # 3. Contrasts (RR)
+  contrasts <- risk_obj$contrasts %>%
+    filter(horizon == max_time) %>%
+    mutate(
+      rr_disp = sprintf("%.2f (%.2f, %.2f)", RR, RR_lower, RR_upper)
+    ) %>% select(trt_group = trt, RR, RR_lower, RR_upper, rr_disp)
+  
+  # Merge
+  res <- counts %>%
+    left_join(risks, by = "trt_group") %>%
+    left_join(contrasts, by = "trt_group") %>%
+    mutate(
+      rr_disp = if_else(trt_group == ref_name, "Ref.", rr_disp),
+      RR = if_else(trt_group == ref_name, 1, RR),
+      RR_lower = if_else(trt_group == ref_name, 1, RR_lower),
+      RR_upper = if_else(trt_group == ref_name, 1, RR_upper),
+      Cohort = cohort_label,
+      Interruption = int_label
+    )
+  return(res)
+}
 
-risk_tr2 <- readRDS(paste0(RES_DIR, "Risk/risk_tr2_34d.rds"))
-risk_tr3 <- readRDS(paste0(RES_DIR, "Risk/risk_tr3_514d.rds"))
+
+
+
+extract_rd_data <- function(risk_obj, 
+                            dat_weights, 
+                            max_time, 
+                            outcome = "od",
+                            ref_name = "no reversion", 
+                            cohort_label, 
+                            int_label) {
+  
+  # 1. Counts
+  if(outcome == "dis"){
+    counts <- compute_summary_stats_timewin(
+      dat_weights, time_var = "time_discont", event_var = "sens_discont", 
+      weight_var = "wt_trunc", trt_var = "trt", max_time = max_time
+    ) %>% dplyr::select(trt_group = trt, Episode)
+  }
+  
+  if(outcome == "od"){
+    counts <- compute_summary_stats_timewin(
+      dat_weights, time_var = "time_od_acute", event_var = "sens_od_acute", 
+      weight_var = "wt_trunc", trt_var = "trt", max_time = max_time
+    ) %>% dplyr::select(trt_group = trt, Episode)
+  }
+  
+  
+  # 2. Absolute Risk (converted to %)
+  risks <- risk_obj$risks %>%
+    filter(horizon == max_time) %>%
+    mutate(
+      risk_pct = risk * 100,
+      risk_lower_pct = risk_lower * 100,
+      risk_upper_pct = risk_upper * 100,
+      # Conditional formatting: 1 decimal if >= 10%, 2 decimals if < 10%
+      abs_risk_disp = ifelse(
+        abs(risk_pct) >= 10,
+        sprintf("%.1f (%.1f, %.1f)", risk_pct, risk_lower_pct, risk_upper_pct),
+        sprintf("%.2f (%.2f, %.2f)", risk_pct, risk_lower_pct, risk_upper_pct)
+      )
+    ) %>% dplyr::select(trt_group = trt, abs_risk_disp)
+  
+  # 3. Contrasts (RD converted to %)
+  contrasts <- risk_obj$contrasts %>%
+    filter(horizon == max_time) %>%
+    mutate(
+      rd_pct = RD * 100,
+      rd_lower_pct = RD_lower * 100,
+      rd_upper_pct = RD_upper * 100,
+      # Conditional formatting for Risk Difference
+      rd_disp = ifelse(
+        abs(rd_pct) >= 10,
+        sprintf("%.1f (%.1f, %.1f)", rd_pct, rd_lower_pct, rd_upper_pct),
+        sprintf("%.2f (%.2f, %.2f)", rd_pct, rd_lower_pct, rd_upper_pct)
+      )
+    ) %>% dplyr::select(trt_group = trt, rd_pct, rd_lower_pct, rd_upper_pct, rd_disp)
+  
+  # 4. Merge and finalize reference group
+  res <- counts %>%
+    left_join(risks, by = "trt_group") %>%
+    left_join(contrasts, by = "trt_group") %>%
+    mutate(
+      rd_disp = if_else(trt_group == ref_name, "Ref.", rd_disp),
+      rd_pct = if_else(trt_group == ref_name, 0, rd_pct),
+      rd_lower_pct = if_else(trt_group == ref_name, 0, rd_lower_pct),
+      rd_upper_pct = if_else(trt_group == ref_name, 0, rd_upper_pct),
+      Cohort = cohort_label,
+      Interruption = int_label
+    )
+  
+  return(res)
+}
+
+
+
+# --- HELPER: Extract RMST Differences ---
+extract_rmst_data <- function(risk_obj, 
+                              dat_weights, 
+                              max_time, 
+                              outcome = "dis",
+                              ref_name = "no reversion", 
+                              cohort_label, 
+                              int_label) {
+  # 1. Counts
+  
+  # 1. Counts
+  if(outcome == "dis"){
+    counts <- compute_summary_stats_timewin(
+      dat_weights, time_var = "time_discont", event_var = "sens_discont", 
+      weight_var = "wt_trunc", trt_var = "trt", max_time = max_time
+    ) %>% dplyr::select(trt_group = trt, Episode)
+  }
+  
+  if(outcome == "od"){
+    counts <- compute_summary_stats_timewin(
+      dat_weights, time_var = "time_od_acute", event_var = "sens_od_acute", 
+      weight_var = "wt_trunc", trt_var = "trt", max_time = max_time
+    ) %>% dplyr::select(trt_group = trt, Episode)
+  }
+  
+  
+  # 2. Absolute RMST
+  rmst_abs <- risk_obj$rmst %>%
+    mutate(
+      rmst_disp = sprintf("%.1f (%.1f, %.1f)", RMST, RMST_lower, RMST_upper)
+    ) %>% select(trt_group = trt, rmst_disp)
+  
+  # 3. RMST Contrasts
+  rmst_diffs <- risk_obj$rmst_contrasts %>%
+    mutate(
+      diff_disp = sprintf("%.1f (%.1f, %.1f)", RMST_diff, RMST_diff_lower, RMST_diff_upper)
+    ) %>% select(trt_group = trt, RMST_diff, RMST_diff_lower, RMST_diff_upper, diff_disp)
+  
+  # Merge
+  res <- counts %>%
+    left_join(rmst_abs, by = "trt_group") %>%
+    left_join(rmst_diffs, by = "trt_group") %>%
+    mutate(
+      diff_disp = if_else(trt_group == ref_name, "Ref.", diff_disp),
+      RMST_diff = if_else(trt_group == ref_name, 0, RMST_diff),
+      RMST_diff_lower = if_else(trt_group == ref_name, 0, RMST_diff_lower),
+      RMST_diff_upper = if_else(trt_group == ref_name, 0, RMST_diff_upper),
+      Cohort = cohort_label,
+      Interruption = int_label
+    )
+  return(res)
+}
+
+
+
+risk_tr2 <- readRDS(paste0(RES_DIR, "Risk/risk_tr2_34d_rmst.rds"))
+
+risk_tr3 <- readRDS(paste0(RES_DIR, "Risk/risk_tr3_514d_rmst.rds"))
 
 dat_tr2_first <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
 dat_tr2_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
@@ -100,836 +237,590 @@ dat_tr3_first <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
 dat_tr3_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
 
 
-# A. MET interruption of 3-4 days ##############
-## at 30 days: od ##################
-risk_at = 30
+# od #########
+## Figure 2A: met 3-4: od: 90-day-RR ###########
 
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr2_first <- extract_risk_and_rd(risk_tr2$first$od, timepoint = risk_at, ref_name = "no reversion")
+risk_at <- 90
 
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr2_first <- compute_summary_stats_timewin(
-  dat_tr2_first$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
+# Build Data for Trial 2
+tr2_first_rr <- extract_rr_data(risk_tr2$first$od$ci, outcome="od", 
+                                dat_tr2_first$data_weights, risk_at, 
+                                cohort_label = "First episode", int_label = "3-4 days")
+tr2_all_rr   <- extract_rr_data(risk_tr2$all$od$ci,  outcome="od", 
+                                dat_tr2_all$data_weights, risk_at, 
+                                cohort_label = "Any episode", int_label = "3-4 days")
 
-# Final preparatory dataset for this stratum
-tr2_plot_first <- counts_tr2_first %>%
-  left_join(risk_rd_tr2_first, by = "trt_group") %>%
-  mutate(
-    Cohort = "First episode", 
-    outcome = "Overdose", 
-    Interruption = "3-4 days"
-  )
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr2_all <- extract_risk_and_rd(risk_tr2$all$od, 
-                                       timepoint = risk_at, 
-                                       ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr2_all <- compute_summary_stats_timewin(
-  dat_tr2_all$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-
-
-# Final preparatory dataset for this stratum
-tr2_plot_all <- counts_tr2_all %>%
-  left_join(risk_rd_tr2_all, by = "trt_group") %>%
-  mutate(
-    Cohort = "Any episode", 
-    outcome = "Overdose", 
-    Interruption = "3-4 days"
-  )
-
-
-library(stringr)
-
-# 1. Combine and format
-tr2_plot <- bind_rows(tr2_plot_first, tr2_plot_all) %>% 
-  select(Cohort, Interruption, trt_group, Episode, abs_risk_display, 
-         rd_display, rd_pct, rd_lower_pct, rd_upper_pct) %>% 
+plot_data_rr <- bind_rows(tr2_first_rr, tr2_all_rr) %>%
   mutate(
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
                        ">=50%/<=40mg" = "≥50% reduction/≤40mg",
                        "increase" = "Dose increase"),
-    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
-    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
-    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct)
-  ) %>% 
+    RR = ifelse(trt_group == "No dose change", NA, RR),
+    RR_lower = ifelse(trt_group == "No dose change", NA, RR_lower),
+    RR_upper = ifelse(trt_group == "No dose change", NA, RR_upper),
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    ` ` = paste(rep(" ", 16), collapse = " ") # Empty canvas column
+  ) %>%
   rename(
-    `Dose adjustment\nafter interruption` = "trt_group", 
+    `Dose adjustment\nafter interruption` = "trt_group",
     `Episode, n` = "Episode",
-    `% risk at 1 month\n(95% CI)` = "abs_risk_display",
-    `% difference in 1-month\nrisk (95% CI)` = "rd_display",
-    `First interruption` = "Interruption"
+    `% risk at 3 months\n(95% CI)` = "abs_risk_disp",
+    `Risk Ratio\n(95% CI)` = "rr_disp"
   )
 
-# 2. Add an explicit, empty string column for the forest plot space
-tr2_plot$` ` <- paste(rep(" ", 16), collapse = " ")
-
-# 3. Clean repetitive labels for the table display
-tr2_plot$`Cohort` <- ifelse(duplicated(tr2_plot$`Cohort`), "", tr2_plot$`Cohort`)
-tr2_plot$`First interruption` <- ifelse(duplicated(tr2_plot$`First interruption`), "", tr2_plot$`First interruption`)
-
-
-# 4. Generate the plot
-p_dis_tr2 <- forest(
-  tr2_plot[, c("Cohort", "Dose adjustment\nafter interruption", 
-               "Episode, n", "% risk at 1 month\n(95% CI)", "% difference in 1-month\nrisk (95% CI)", " ")],
-  est   = tr2_plot$rd_pct,
-  lower = tr2_plot$rd_lower_pct,
-  upper = tr2_plot$rd_upper_pct,
-  ci_column = 6, # Points to the blank string column
-  ref_line = 0,
-  sizes = 0.6,
-  x_trans = "none",
-  xlim = c(-2.5, 2.5),
-  ticks_at = c(-2, -1, 0, 1, 2),
-  xlab = "Risk difference (%)",
-  arrow_lab = NULL, # More precise clinical language
-  title = "A. Comparative risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 3-4 days\n",
-  nudge_y = 0.02,
-  theme = forest_theme(
-    base_size = 14,
-    ci_pch = 15,
-    ci_lwd = 1.7,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-    arrow_length = 0.05,
-    arrow_gp = gpar(fontsize = 11, lwd = 0.7),
-    xlab_adjust = c("refline", "center")
-  )
+# Generate Forest Plot
+p_rr <- forest(
+  plot_data_rr[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                   "% risk at 3 months\n(95% CI)", "Risk Ratio\n(95% CI)", " ")],
+  est = plot_data_rr$RR, lower = plot_data_rr$RR_lower, upper = plot_data_rr$RR_upper,
+  ci_column = 6, 
+  ref_line = 1,          # Multiplicative null
+  x_trans = "log",       # Log scale for ratios
+  xlim = c(0.25, 4),     # Adjust bounds if CI exceeds 4
+  ticks_at = c(0.25, 0.5, 1, 2, 4),
+  xlab = "Risk ratio",
+  title = "A. Relative risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 3-4 days\n",
+  theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       xlab_adjust = c("refline", "center"))
 )
 
+# Add Legend
+txt_rr <- "Risk: cumulative incidence<br>RR: Ratio of cumulative incidences<br>CI: compatibility intervals"
+p_rr_final <- add_grob(p_rr, row = nrow(plot_data_rr)+2, col = 1:2, order = "background", 
+                       gb_fn = gridtext::richtext_grob, text = txt_rr, gp = gpar(fontsize = 11), 
+                       hjust = 0, vjust = 1, halign = 0, valign = 1, x = unit(0, "npc"), y = unit(1, "npc"))
 
-
-txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
-
-p_dis_tr2_1 <- add_grob(p_dis_tr2, 
-                        row = nrow(tr2_plot)+2, 
-                        col = 1:2,
-                        order = "background",
-                        gb_fn = gridtext::richtext_grob,
-                        text = txt,
-                        gp = gpar(fontsize = 11),
-                        hjust = 0, vjust = 1, halign = 0, valign = 1,
-                        x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/", "Figure2_A_1m.jpg"),
-     width = 3500,  height = 1400, res = 300)
-p_dis_tr2_1
+jpeg(paste0(RES_DIR, "Figures/", "Figure2_A_3m_RR.jpg"), width = 3500, height = 1400, res = 300)
+p_rr_final
 dev.off()
 
+## Figure 2A: met 3-4: od: 90-day-RD ###########
 
+risk_at <- 90
 
+# Build Data for Trial 2 (3-4 days interruption)
+tr2_first_rd <- extract_rd_data(risk_tr2$first$od$ci, outcome = "od",
+                                dat_tr2_first$data_weights, risk_at, 
+                                cohort_label = "First episode", int_label = "3-4 days")
+tr2_all_rd   <- extract_rd_data(risk_tr2$all$od$ci, outcome = "od",
+                                dat_tr2_all$data_weights, risk_at, 
+                                cohort_label = "Any episode", int_label = "3-4 days")
 
-## at 90 days: od ##################
-risk_at = 90
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr2_first <- extract_risk_and_rd(risk_tr2$first$od, 
-                                         timepoint = risk_at, 
-                                         ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr2_first <- compute_summary_stats_timewin(
-  dat_tr2_first$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-# Final preparatory dataset for this stratum
-tr2_plot_first <- counts_tr2_first %>%
-  left_join(risk_rd_tr2_first, by = "trt_group") %>%
+# Combine and Format for Plotting
+plot_data_rd <- bind_rows(tr2_first_rd, tr2_all_rd) %>%
   mutate(
-    Cohort = "First episode", 
-    outcome = "Overdose", 
-    Interruption = "3-4 days"
-  )
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr2_all <- extract_risk_and_rd(risk_tr2$all$od, 
-                                       timepoint = risk_at, 
-                                       ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr2_all <- compute_summary_stats_timewin(
-  dat_tr2_all$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-
-
-# Final preparatory dataset for this stratum
-tr2_plot_all <- counts_tr2_all %>%
-  left_join(risk_rd_tr2_all, by = "trt_group") %>%
-  mutate(
-    Cohort = "Any episode", 
-    outcome = "Overdose", 
-    Interruption = "3-4 days"
-  )
-
-
-library(stringr)
-
-# 1. Combine and format
-tr2_plot <- bind_rows(tr2_plot_first, tr2_plot_all) %>% 
-  select(Cohort, Interruption, trt_group, Episode, abs_risk_display, 
-         rd_display, rd_pct, rd_lower_pct, rd_upper_pct) %>% 
-  mutate(
+    # Clean treatment names
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
                        ">=50%/<=40mg" = "≥50% reduction/≤40mg",
                        "increase" = "Dose increase"),
+    
+    # NA out the numeric values for the reference group so the plot doesn't draw a box at 0
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
-    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct)
-  ) %>% 
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    
+    # Clean repetitive cohort labels
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    
+    # Create the empty string column to act as the canvas for the forest plot visual
+    ` ` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
   rename(
-    `Dose adjustment\nafter interruption` = "trt_group", 
+    `Dose adjustment\nafter interruption` = "trt_group",
     `Episode, n` = "Episode",
-    `% risk at 3 months\n(95% CI)` = "abs_risk_display",
-    `% difference in 3-month\nrisk (95% CI)` = "rd_display",
-    `First interruption` = "Interruption"
+    `% risk at 3 months\n(95% CI)` = "abs_risk_disp",
+    `Risk Difference (%)\n(95% CI)` = "rd_disp"
   )
 
-# 2. Add an explicit, empty string column for the forest plot space
-tr2_plot$` ` <- paste(rep(" ", 16), collapse = " ")
-
-# 3. Clean repetitive labels for the table display
-tr2_plot$`Cohort` <- ifelse(duplicated(tr2_plot$`Cohort`), "", tr2_plot$`Cohort`)
-tr2_plot$`First interruption` <- ifelse(duplicated(tr2_plot$`First interruption`), "", tr2_plot$`First interruption`)
-
-
-# 4. Generate the plot
-p_dis_tr2 <- forest(
-  tr2_plot[, c("Cohort", "Dose adjustment\nafter interruption", 
-               "Episode, n", "% risk at 3 months\n(95% CI)", "% difference in 3-month\nrisk (95% CI)", " ")],
-  est   = tr2_plot$rd_pct,
-  lower = tr2_plot$rd_lower_pct,
-  upper = tr2_plot$rd_upper_pct,
-  ci_column = 6, # Points to the blank string column
-  ref_line = 0,
-  sizes = 0.6,
-  x_trans = "none",
-  xlim = c(-2.5, 2.5),
-  ticks_at = c(-2, -1, 0, 1, 2),
-  xlab = "Risk difference (%)",
-  arrow_lab = NULL, # More precise clinical language
-  title = "A. Comparative risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 3-4 days\n",
-  nudge_y = 0.02,
-  theme = forest_theme(
-    base_size = 14,
-    ci_pch = 15,
-    ci_lwd = 1.7,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-    arrow_length = 0.05,
-    arrow_gp = gpar(fontsize = 11, lwd = 0.7),
-    xlab_adjust = c("refline", "center")
-  )
-)
-
-
-
-txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
-
-p_dis_tr2_1 <- add_grob(p_dis_tr2, 
-                        row = nrow(tr2_plot)+2, 
-                        col = 1:2,
-                        order = "background",
-                        gb_fn = gridtext::richtext_grob,
-                        text = txt,
-                        gp = gpar(fontsize = 11),
-                        hjust = 0, vjust = 1, halign = 0, valign = 1,
-                        x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/", "Figure2_A_3m.jpg"),
-     width = 3500,  height = 1400, res = 300)
-p_dis_tr2_1
-dev.off()
-
-
-
-# B. MET interruption of 5-14 days ##############
-## at 30 days: od ##################
-risk_at = 30
-
-### MET 5-14d: First epiode ###########
-risk_rd_tr3_first <- extract_risk_and_rd(risk_tr3$first$od, timepoint = risk_at, ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr3_first <- compute_summary_stats_timewin(
-  dat_tr3_first$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-# Final preparatory dataset for this stratum
-tr3_plot_first <- counts_tr3_first %>%
-  left_join(risk_rd_tr3_first, by = "trt_group") %>%
-  mutate(
-    Cohort = "First episode", 
-    outcome = "Overdose", 
-    Interruption = "5-14 days"
-  )
-
-### MET 5-14d: First interruption in any epiode ###########
-risk_rd_tr3_all <- extract_risk_and_rd(risk_tr3$all$od, 
-                                       timepoint = risk_at, 
-                                       ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr3_all <- compute_summary_stats_timewin(
-  dat_tr3_all$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-
-
-# Final preparatory dataset for this stratum
-tr3_plot_all <- counts_tr3_all %>%
-  left_join(risk_rd_tr3_all, by = "trt_group") %>%
-  mutate(
-    Cohort = "Any episode", 
-    outcome = "Overdose", 
-    Interruption = "5-14 days"
-  )
-
-
-library(stringr)
-
-# 1. Combine and format
-tr3_plot <- bind_rows(tr3_plot_first, tr3_plot_all) %>% 
-  select(Cohort, Interruption, trt_group, Episode, abs_risk_display, 
-         rd_display, rd_pct, rd_lower_pct, rd_upper_pct) %>% 
-  mutate(
-    trt_group = recode(trt_group,
-                       "no reversion" = "No dose change",
-                       "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
-                       "increase" = "Dose increase"),
-    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
-    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
-    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct)
-  ) %>% 
-  rename(
-    `Dose adjustment\nafter interruption` = "trt_group", 
-    `Episode, n` = "Episode",
-    `% risk at 1 month\n(95% CI)` = "abs_risk_display",
-    `% difference in 1-month\nrisk (95% CI)` = "rd_display",
-    `First interruption` = "Interruption"
-  )
-
-# 2. Add an explicit, empty string column for the forest plot space
-tr3_plot$` ` <- paste(rep(" ", 16), collapse = " ")
-
-# 3. Clean repetitive labels for the table display
-tr3_plot$`Cohort` <- ifelse(duplicated(tr3_plot$`Cohort`), "", tr3_plot$`Cohort`)
-tr3_plot$`First interruption` <- ifelse(duplicated(tr3_plot$`First interruption`), "", tr3_plot$`First interruption`)
-
-
-# 4. Generate the plot
-p_dis_tr3 <- forest(
-  tr3_plot[, c("Cohort", "Dose adjustment\nafter interruption", 
-               "Episode, n", "% risk at 1 month\n(95% CI)", "% difference in 1-month\nrisk (95% CI)", " ")],
-  est   = tr3_plot$rd_pct,
-  lower = tr3_plot$rd_lower_pct,
-  upper = tr3_plot$rd_upper_pct,
-  ci_column = 6, # Points to the blank string column
-  ref_line = 0,
-  sizes = 0.6,
-  x_trans = "none",
-  xlim = c(-2.5, 2.5),
-  ticks_at = c(-2, -1, 0, 1, 2),
-  xlab = "Risk difference (%)",
-  arrow_lab = NULL, # More precise clinical language
-  title = "B. Comparative risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 5-14 days\n",
-  nudge_y = 0.02,
-  theme = forest_theme(
-    base_size = 14,
-    ci_pch = 15,
-    ci_lwd = 1.7,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-    arrow_length = 0.05,
-    arrow_gp = gpar(fontsize = 11, lwd = 0.7),
-    xlab_adjust = c("refline", "center")
-  )
-)
-
-
-
-txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
-
-p_dis_tr3_1 <- add_grob(p_dis_tr3, 
-                        row = nrow(tr3_plot)+2, 
-                        col = 1:2,
-                        order = "background",
-                        gb_fn = gridtext::richtext_grob,
-                        text = txt,
-                        gp = gpar(fontsize = 11),
-                        hjust = 0, vjust = 1, halign = 0, valign = 1,
-                        x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/", "Figure2_B_1m.jpg"),
-     width = 3500,  height = 1400, res = 300)
-p_dis_tr3_1
-dev.off()
-
-
-
-
-## at 90 days: od ##################
-risk_at = 90
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr3_first <- extract_risk_and_rd(risk_tr3$first$od, 
-                                         timepoint = risk_at, 
-                                         ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr3_first <- compute_summary_stats_timewin(
-  dat_tr3_first$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-# Final preparatory dataset for this stratum
-tr3_plot_first <- counts_tr3_first %>%
-  left_join(risk_rd_tr3_first, by = "trt_group") %>%
-  mutate(
-    Cohort = "First episode", 
-    outcome = "Overdose", 
-    Interruption = "5-14 days"
-  )
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr3_all <- extract_risk_and_rd(risk_tr3$all$od, 
-                                       timepoint = risk_at, 
-                                       ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr3_all <- compute_summary_stats_timewin(
-  dat_tr3_all$data_weights,
-  time_var = "time_od_acute",
-  event_var = "sens_od_acute",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-
-
-# Final preparatory dataset for this stratum
-tr3_plot_all <- counts_tr3_all %>%
-  left_join(risk_rd_tr3_all, by = "trt_group") %>%
-  mutate(
-    Cohort = "Any episode", 
-    outcome = "Overdose", 
-    Interruption = "5-14 days"
-  )
-
-
-library(stringr)
-
-# 1. Combine and format
-tr3_plot <- bind_rows(tr3_plot_first, tr3_plot_all) %>% 
-  select(Cohort, Interruption, trt_group, Episode, abs_risk_display, 
-         rd_display, rd_pct, rd_lower_pct, rd_upper_pct) %>% 
-  mutate(
-    trt_group = recode(trt_group,
-                       "no reversion" = "No dose change",
-                       "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
-                       "increase" = "Dose increase"),
-    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
-    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
-    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct)
-  ) %>% 
-  rename(
-    `Dose adjustment\nafter interruption` = "trt_group", 
-    `Episode, n` = "Episode",
-    `% risk at 3 months\n(95% CI)` = "abs_risk_display",
-    `% difference in 3-month\nrisk (95% CI)` = "rd_display",
-    `First interruption` = "Interruption"
-  )
-
-# 2. Add an explicit, empty string column for the forest plot space
-tr3_plot$` ` <- paste(rep(" ", 16), collapse = " ")
-
-# 3. Clean repetitive labels for the table display
-tr3_plot$`Cohort` <- ifelse(duplicated(tr3_plot$`Cohort`), "", tr3_plot$`Cohort`)
-tr3_plot$`First interruption` <- ifelse(duplicated(tr3_plot$`First interruption`), "", tr3_plot$`First interruption`)
-
-
-# 4. Generate the plot
-p_dis_tr3 <- forest(
-  tr3_plot[, c("Cohort", "Dose adjustment\nafter interruption", 
-               "Episode, n", "% risk at 3 months\n(95% CI)", "% difference in 3-month\nrisk (95% CI)", " ")],
-  est   = tr3_plot$rd_pct,
-  lower = tr3_plot$rd_lower_pct,
-  upper = tr3_plot$rd_upper_pct,
-  ci_column = 6, # Points to the blank string column
-  ref_line = 0,
-  sizes = 0.6,
-  x_trans = "none",
-  xlim = c(-2.5, 2.5),
-  ticks_at = c(-2, -1, 0, 1, 2),
-  xlab = "Risk difference (%)",
-  arrow_lab = NULL, # More precise clinical language
-  title = "B. Comparative risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 5-14 days\n",
-  nudge_y = 0.02,
-  theme = forest_theme(
-    base_size = 14,
-    ci_pch = 15,
-    ci_lwd = 1.7,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-    arrow_length = 0.05,
-    arrow_gp = gpar(fontsize = 11, lwd = 0.7),
-    xlab_adjust = c("refline", "center")
-  )
-)
-
-
-
-txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
-
-p_dis_tr3_1 <- add_grob(p_dis_tr3, 
-                        row = nrow(tr3_plot)+2, 
-                        col = 1:2,
-                        order = "background",
-                        gb_fn = gridtext::richtext_grob,
-                        text = txt,
-                        gp = gpar(fontsize = 11),
-                        hjust = 0, vjust = 1, halign = 0, valign = 1,
-                        x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/", "Figure2_B_3m.jpg"),
-     width = 3500,  height = 1400, res = 300)
-p_dis_tr3_1
-dev.off()
-
-
-
-# A. MET interruption of 3-4 days ################
-## at 365 days: dis ##################
-risk_at = 365
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr2_first <- extract_risk_and_rd(risk_tr2$first$dis, 
-                                         timepoint = risk_at, 
-                                         ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr2_first <- compute_summary_stats_timewin(
-  dat_tr2_first$data_weights,
-  time_var = "time_discont",
-  event_var = "sens_discont",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-# Final preparatory dataset for this stratum
-tr2_plot_first <- counts_tr2_first %>%
-  left_join(risk_rd_tr2_first, by = "trt_group") %>%
-  mutate(
-    Cohort = "First episode", 
-    outcome = "Overdose", 
-    Interruption = "3-4 days"
-  )
-
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr2_all <- extract_risk_and_rd(risk_tr2$all$dis, 
-                                       timepoint = risk_at, 
-                                       ref_name = "no reversion")
-
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr2_all <- compute_summary_stats_timewin(
-  dat_tr2_all$data_weights,
-  time_var = "time_discont",
-  event_var = "sens_discont",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-
-
-# Final preparatory dataset for this stratum
-tr2_plot_all <- counts_tr2_all %>%
-  left_join(risk_rd_tr2_all, by = "trt_group") %>%
-  mutate(
-    Cohort = "Any episode", 
-    outcome = "Overdose", 
-    Interruption = "3-4 days"
-  )
-
-
-library(stringr)
-
-# 1. Combine and format
-tr2_plot <- bind_rows(tr2_plot_first, tr2_plot_all) %>% 
-  select(Cohort, Interruption, trt_group, Episode, abs_risk_display, 
-         rd_display, rd_pct, rd_lower_pct, rd_upper_pct) %>% 
-  mutate(
-    trt_group = recode(trt_group,
-                       "no reversion" = "No dose change",
-                       "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
-                       "increase" = "Dose increase"),
-    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
-    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
-    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct)
-  ) %>% 
-  rename(
-    `Dose adjustment\nafter interruption` = "trt_group", 
-    `Episode, n` = "Episode",
-    `% risk at 12 months\n(95% CI)` = "abs_risk_display",
-    `% difference in 12-month\nrisk (95% CI)` = "rd_display",
-    `First interruption` = "Interruption"
-  )
-
-# 2. Add an explicit, empty string column for the forest plot space
-tr2_plot$` ` <- paste(rep(" ", 16), collapse = " ")
-
-# 3. Clean repetitive labels for the table display
-tr2_plot$`Cohort` <- ifelse(duplicated(tr2_plot$`Cohort`), "", tr2_plot$`Cohort`)
-tr2_plot$`First interruption` <- ifelse(duplicated(tr2_plot$`First interruption`), "", tr2_plot$`First interruption`)
-
+# Generate Forest Plot
 library(forestploter)
+library(grid)
 
-# 4. Generate the plot
-p_dis_tr2 <- forest(
-  tr2_plot[, c("Cohort", "Dose adjustment\nafter interruption", 
-               "Episode, n", "% risk at 12 months\n(95% CI)", "% difference in 12-month\nrisk (95% CI)", " ")],
-  est   = tr2_plot$rd_pct,
-  lower = tr2_plot$rd_lower_pct,
-  upper = tr2_plot$rd_upper_pct,
-  ci_column = 6, # Points to the blank string column
-  ref_line = 0,
-  sizes = 0.6,
-  x_trans = "none",
+p_rd <- forest(
+  plot_data_rd[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                   "% risk at 3 months\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
+  est       = plot_data_rd$rd_pct, 
+  lower     = plot_data_rd$rd_lower_pct, 
+  upper     = plot_data_rd$rd_upper_pct,
+  ci_column = 6, 
+  ref_line  = 0,          # Additive null for Risk Difference
+  x_trans   = "none",     # Linear scale
+  xlim      = c(-2.5, 2.5),  # Adjust bounds based on your max expected difference (e.g., +/- 2.5%)
+  ticks_at  = c(-2, -1, 0, 1, 2),
+  xlab      = "Risk difference (%)",
+  title     = "A. % difference in risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 3-4 days\n",
+  theme     = forest_theme(
+    base_size   = 14, 
+    ci_pch      = 15, 
+    ci_lwd      = 1.7,
+    refline_gp  = gpar(lwd = 1, lty = "dashed", col = "red"),
+    xlab_adjust = c("refline", "center")
+  )
+)
+
+# Add Legend/Footnote
+txt_rd <- "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals"
+p_rd_final <- add_grob(
+  p_rd, 
+  row = nrow(plot_data_rd) + 2, 
+  col = 1:2, 
+  order = "background", 
+  gb_fn = gridtext::richtext_grob, 
+  text = txt_rd, 
+  gp = gpar(fontsize = 11), 
+  hjust = 0, vjust = 1, halign = 0, valign = 1, 
+  x = unit(0, "npc"), y = unit(1, "npc")
+)
+
+# Save output
+jpeg(paste0(RES_DIR, "Figures/", "Figure2_A_3m_RD.jpg"), width = 3500, height = 1400, res = 300)
+p_rd_final
+dev.off()
+
+
+
+## Figure 2A: met 3-4: od: 30-day-RR ###########
+
+risk_at <- 30
+
+# Build Data for Trial 2
+tr2_first_rr <- extract_rr_data(risk_tr2$first$od$ci, outcome="od", 
+                                dat_tr2_first$data_weights, risk_at, 
+                                cohort_label = "First episode", int_label = "3-4 days")
+tr2_all_rr   <- extract_rr_data(risk_tr2$all$od$ci,  outcome="od", 
+                                dat_tr2_all$data_weights, risk_at, 
+                                cohort_label = "Any episode", int_label = "3-4 days")
+
+plot_data_rr <- bind_rows(tr2_first_rr, tr2_all_rr) %>%
+  mutate(
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    RR = ifelse(trt_group == "No dose change", NA, RR),
+    RR_lower = ifelse(trt_group == "No dose change", NA, RR_lower),
+    RR_upper = ifelse(trt_group == "No dose change", NA, RR_upper),
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    ` ` = paste(rep(" ", 16), collapse = " ") # Empty canvas column
+  ) %>%
+  rename(
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode, n` = "Episode",
+    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
+    `Risk Ratio\n(95% CI)` = "rr_disp"
+  )
+
+# Generate Forest Plot
+p_rr <- forest(
+  plot_data_rr[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                   "% risk at 1 month\n(95% CI)", "Risk Ratio\n(95% CI)", " ")],
+  est = plot_data_rr$RR, lower = plot_data_rr$RR_lower, upper = plot_data_rr$RR_upper,
+  ci_column = 6, 
+  ref_line = 1,          # Multiplicative null
+  x_trans = "log",       # Log scale for ratios
+  xlim = c(0.25, 4),     # Adjust bounds if CI exceeds 4
+  ticks_at = c(0.25, 0.5, 1, 2, 4),
+  xlab = "Risk ratio",
+  title = "A. Relative risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 3-4 days\n",
+  theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       xlab_adjust = c("refline", "center"))
+)
+
+# Add Legend
+txt_rr <- "Risk: cumulative incidence<br>RR: Ratio of cumulative incidences<br>CI: compatibility intervals"
+p_rr_final <- add_grob(p_rr, row = nrow(plot_data_rr)+2, col = 1:2, order = "background", 
+                       gb_fn = gridtext::richtext_grob, text = txt_rr, gp = gpar(fontsize = 11), 
+                       hjust = 0, vjust = 1, halign = 0, valign = 1, x = unit(0, "npc"), y = unit(1, "npc"))
+
+jpeg(paste0(RES_DIR, "Figures/", "Figure2_A_1m_RR.jpg"), width = 3500, height = 1400, res = 300)
+p_rr_final
+dev.off()
+
+## Figure 2A: met 3-4: od: 30-day-RD ###########
+
+risk_at <- 30
+
+# Build Data for Trial 2 (3-4 days interruption)
+tr2_first_rd <- extract_rd_data(risk_tr2$first$od$ci, outcome = "od",
+                                dat_tr2_first$data_weights, risk_at, 
+                                cohort_label = "First episode", int_label = "3-4 days")
+tr2_all_rd   <- extract_rd_data(risk_tr2$all$od$ci, outcome = "od",
+                                dat_tr2_all$data_weights, risk_at, 
+                                cohort_label = "Any episode", int_label = "3-4 days")
+
+# Combine and Format for Plotting
+plot_data_rd <- bind_rows(tr2_first_rd, tr2_all_rd) %>%
+  mutate(
+    # Clean treatment names
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    
+    # NA out the numeric values for the reference group so the plot doesn't draw a box at 0
+    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
+    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    
+    # Clean repetitive cohort labels
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    
+    # Create the empty string column to act as the canvas for the forest plot visual
+    ` ` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
+  rename(
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode, n` = "Episode",
+    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
+    `Risk Difference (%)\n(95% CI)` = "rd_disp"
+  )
+
+# Generate Forest Plot
+library(forestploter)
+library(grid)
+
+p_rd <- forest(
+  plot_data_rd[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                   "% risk at 1 month\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
+  est       = plot_data_rd$rd_pct, 
+  lower     = plot_data_rd$rd_lower_pct, 
+  upper     = plot_data_rd$rd_upper_pct,
+  ci_column = 6, 
+  ref_line  = 0,          # Additive null for Risk Difference
+  x_trans   = "none",     # Linear scale
+  xlim      = c(-2.5, 2.5),  # Adjust bounds based on your max expected difference (e.g., +/- 2.5%)
+  ticks_at  = c(-2, -1, 0, 1, 2),
+  xlab      = "Risk difference (%)",
+  title     = "A. % difference in risk of overdose-related acute care visits among dose adjustment groups\n    after first interruption of 3-4 days\n",
+  theme     = forest_theme(
+    base_size   = 14, 
+    ci_pch      = 15, 
+    ci_lwd      = 1.7,
+    refline_gp  = gpar(lwd = 1, lty = "dashed", col = "red"),
+    xlab_adjust = c("refline", "center")
+  )
+)
+
+# Add Legend/Footnote
+txt_rd <- "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals"
+p_rd_final <- add_grob(
+  p_rd, 
+  row = nrow(plot_data_rd) + 2, 
+  col = 1:2, 
+  order = "background", 
+  gb_fn = gridtext::richtext_grob, 
+  text = txt_rd, 
+  gp = gpar(fontsize = 11), 
+  hjust = 0, vjust = 1, halign = 0, valign = 1, 
+  x = unit(0, "npc"), y = unit(1, "npc")
+)
+
+# Save output
+jpeg(paste0(RES_DIR, "Figures/", "Figure2_A_1m_RD.jpg"), width = 3500, height = 1400, res = 300)
+p_rd_final
+dev.off()
+
+
+
+# dis #########
+## Figure 3A: met 3-4: dis: 12-months-RD ###########
+risk_at <- 365
+
+# Build Data for Trial 2 (3-4 days interruption)
+tr2_first_rd <- extract_rd_data(risk_tr2$first$dis$ci, outcome = "dis", 
+                                dat_tr2_first$data_weights, risk_at, 
+                                cohort_label = "First episode", int_label = "3-4 days")
+tr2_all_rd   <- extract_rd_data(risk_tr2$all$dis$ci, outcome = "dis", 
+                                dat_tr2_all$data_weights, risk_at, 
+                                cohort_label = "Any episode", int_label = "3-4 days")
+
+# Combine and Format for Plotting
+plot_data_rd <- bind_rows(tr2_first_rd, tr2_all_rd) %>%
+  mutate(
+    # Clean treatment names
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    
+    # NA out the numeric values for the reference group so the plot doesn't draw a box at 0
+    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
+    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    
+    # Clean repetitive cohort labels
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    
+    # Create the empty string column to act as the canvas for the forest plot visual
+    ` ` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
+  rename(
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode, n` = "Episode",
+    `% risk at 12 months\n(95% CI)` = "abs_risk_disp",
+    `Risk Difference (%)\n(95% CI)` = "rd_disp"
+  )
+
+# Generate Forest Plot
+library(forestploter)
+library(grid)
+
+p_rd <- forest(
+  plot_data_rd[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                   "% risk at 12 months\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
+  est       = plot_data_rd$rd_pct, 
+  lower     = plot_data_rd$rd_lower_pct, 
+  upper     = plot_data_rd$rd_upper_pct,
+  ci_column = 6, 
+  ref_line  = 0,          # Additive null for Risk Difference
+  x_trans   = "none",     # Linear scale
   xlim = c(-12.5, 12.5),
   ticks_at = c(-10, -5, 0, 5, 10),
-  xlab = "Risk difference (%)",
-  arrow_lab = NULL, # More precise clinical language
-  title = "A. Comparative risk of treatment discontinuation among dose adjustment groups\n    after first interruption of 3-4 days\n",
-  nudge_y = 0.02,
-  theme = forest_theme(
-    base_size = 14,
-    ci_pch = 15,
-    ci_lwd = 1.7,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-    arrow_length = 0.05,
-    arrow_gp = gpar(fontsize = 11, lwd = 0.7),
+  xlab      = "Risk difference (%)",
+  title     = "A. % difference in risk of treatment discontinuation among dose adjustment groups\n    after first interruption of 3-4 days\n",
+  theme     = forest_theme(
+    base_size   = 14, 
+    ci_pch      = 15, 
+    ci_lwd      = 1.7,
+    refline_gp  = gpar(lwd = 1, lty = "dashed", col = "red"),
     xlab_adjust = c("refline", "center")
   )
 )
 
+# Add Legend/Footnote
+txt_rd <- "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals"
+p_rd_final <- add_grob(
+  p_rd, 
+  row = nrow(plot_data_rd) + 2, 
+  col = 1:2, 
+  order = "background", 
+  gb_fn = gridtext::richtext_grob, 
+  text = txt_rd, 
+  gp = gpar(fontsize = 11), 
+  hjust = 0, vjust = 1, halign = 0, valign = 1, 
+  x = unit(0, "npc"), y = unit(1, "npc")
+)
 
-
-txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
-
-p_dis_tr2_1 <- add_grob(p_dis_tr2, 
-                        row = nrow(tr2_plot)+2, 
-                        col = 1:2,
-                        order = "background",
-                        gb_fn = gridtext::richtext_grob,
-                        text = txt,
-                        gp = gpar(fontsize = 11),
-                        hjust = 0, vjust = 1, halign = 0, valign = 1,
-                        x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/", "Figure3_A_12m.jpg"),
-     width = 3500,  height = 1400, res = 300)
-p_dis_tr2_1
+# Save output
+jpeg(paste0(RES_DIR, "Figures/", "Figure3_A_12m_RD.jpg"), width = 3500, height = 1400, res = 300)
+p_rd_final
 dev.off()
 
 
 
+## Figure 3B: met 3-4: dis: 12-months-RD ###########
 
-# B. MET interruption of 5-14 days ################
-## at 365 days: dis ##################
-risk_at = 365
+risk_at <- 365
 
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr3_first <- extract_risk_and_rd(risk_tr3$first$dis, 
-                                         timepoint = risk_at, 
-                                         ref_name = "no reversion")
+# Build Data for Trial 2 (5-14 days interruption)
+tr3_first_rd <- extract_rd_data(risk_tr3$first$dis$ci, outcome = "dis", 
+                                dat_tr3_first$data_weights, risk_at, 
+                                cohort_label = "First episode", int_label = "5-14 days")
+tr3_all_rd   <- extract_rd_data(risk_tr3$all$dis$ci, outcome = "dis", 
+                                dat_tr3_all$data_weights, risk_at, 
+                                cohort_label = "Any episode", int_label = "5-14 days")
 
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr3_first <- compute_summary_stats_timewin(
-  dat_tr3_first$data_weights,
-  time_var = "time_discont",
-  event_var = "sens_discont",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-# Final preparatory dataset for this stratum
-tr3_plot_first <- counts_tr3_first %>%
-  left_join(risk_rd_tr3_first, by = "trt_group") %>%
+# Combine and Format for Plotting
+plot_data_rd <- bind_rows(tr3_first_rd, tr3_all_rd) %>%
   mutate(
-    Cohort = "First episode", 
-    outcome = "Overdose", 
-    Interruption = "5-14 days"
+    # Clean treatment names
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    
+    # NA out the numeric values for the reference group so the plot doesn't draw a box at 0
+    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
+    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    
+    # Clean repetitive cohort labels
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    
+    # Create the empty string column to act as the canvas for the forest plot visual
+    ` ` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
+  rename(
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode, n` = "Episode",
+    `% risk at 12 months\n(95% CI)` = "abs_risk_disp",
+    `Risk Difference (%)\n(95% CI)` = "rd_disp"
   )
 
-### MET 3-4d: First interruption in any epiode ###########
-risk_rd_tr3_all <- extract_risk_and_rd(risk_tr3$all$dis, 
-                                       timepoint = risk_at, 
-                                       ref_name = "no reversion")
+# Generate Forest Plot
+library(forestploter)
+library(grid)
 
-# Get baseline counts ONLY (drop the confusing Rate_100PY)
-counts_tr3_all <- compute_summary_stats_timewin(
-  dat_tr3_all$data_weights,
-  time_var = "time_discont",
-  event_var = "sens_discont",
-  weight_var = "wt_trunc",
-  trt_var = "trt",
-  max_time = risk_at
-) %>% 
-  select(trt_group = trt, Episode, Event)
-
-
-
-# Final preparatory dataset for this stratum
-tr3_plot_all <- counts_tr3_all %>%
-  left_join(risk_rd_tr3_all, by = "trt_group") %>%
-  mutate(
-    Cohort = "Any episode", 
-    outcome = "Overdose", 
-    Interruption = "5-14 days"
+p_rd <- forest(
+  plot_data_rd[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                   "% risk at 12 months\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
+  est       = plot_data_rd$rd_pct, 
+  lower     = plot_data_rd$rd_lower_pct, 
+  upper     = plot_data_rd$rd_upper_pct,
+  ci_column = 6, 
+  ref_line  = 0,          # Additive null for Risk Difference
+  x_trans   = "none",     # Linear scale
+  xlim = c(-12.5, 12.5),
+  ticks_at = c(-10, -5, 0, 5, 10),
+  xlab      = "Risk difference (%)",
+  title     = "B. % difference in risk of treatment discontinuation among dose adjustment groups\n    after first interruption of 5-14 days\n",
+  theme     = forest_theme(
+    base_size   = 14, 
+    ci_pch      = 15, 
+    ci_lwd      = 1.7,
+    refline_gp  = gpar(lwd = 1, lty = "dashed", col = "red"),
+    xlab_adjust = c("refline", "center")
   )
+)
+
+# Add Legend/Footnote
+txt_rd <- "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals"
+p_rd_final <- add_grob(
+  p_rd, 
+  row = nrow(plot_data_rd) + 2, 
+  col = 1:2, 
+  order = "background", 
+  gb_fn = gridtext::richtext_grob, 
+  text = txt_rd, 
+  gp = gpar(fontsize = 11), 
+  hjust = 0, vjust = 1, halign = 0, valign = 1, 
+  x = unit(0, "npc"), y = unit(1, "npc")
+)
 
 
-library(stringr)
+# Save output
+jpeg(paste0(RES_DIR, "Figures/", "Figure3_B_12m_RD.jpg"), width = 3500, height = 1400, res = 300)
+p_rd_final
+dev.off()
 
-# 1. Combine and format
-tr3_plot <- bind_rows(tr3_plot_first, tr3_plot_all) %>% 
-  select(Cohort, Interruption, trt_group, Episode, abs_risk_display, 
-         rd_display, rd_pct, rd_lower_pct, rd_upper_pct) %>% 
+# rmst #################
+## eFigure A: met 3-4: dis: rmst at 365 day ###########
+risk_at <- 365
+
+# Build Data for Trial 2
+tr2_first_rmst <- extract_rmst_data(risk_tr2$first$dis$ci, outcome = "dis",
+                                    dat_tr2_first$data_weights, risk_at, 
+                                    cohort_label = "First episode", int_label = "3-4 days")
+tr2_all_rmst   <- extract_rmst_data(risk_tr2$all$dis$ci, outcome = "dis", 
+                                    dat_tr2_all$data_weights, risk_at, 
+                                    cohort_label = "Any episode", int_label = "3-4 days")
+
+plot_data_rmst <- bind_rows(tr2_first_rmst, tr2_all_rmst) %>%
   mutate(
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
                        ">=50%/<=40mg" = "≥50% reduction/≤40mg",
                        "increase" = "Dose increase"),
-    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
-    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
-    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct)
-  ) %>% 
+    RMST_diff = ifelse(trt_group == "No dose change", NA, RMST_diff),
+    RMST_diff_lower = ifelse(trt_group == "No dose change", NA, RMST_diff_lower),
+    RMST_diff_upper = ifelse(trt_group == "No dose change", NA, RMST_diff_upper),
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    ` ` = paste(rep(" ", 16), collapse = " ") # Empty canvas column
+  ) %>%
   rename(
-    `Dose adjustment\nafter interruption` = "trt_group", 
+    `Dose adjustment\nafter interruption` = "trt_group",
     `Episode, n` = "Episode",
-    `% risk at 12 months\n(95% CI)` = "abs_risk_display",
-    `% difference in 12-month\nrisk (95% CI)` = "rd_display",
-    `First interruption` = "Interruption"
+    `Event-free days\nat 12 months (95% CI)` = "rmst_disp",
+    `Difference in days\n(95% CI)` = "diff_disp"
   )
 
-# 2. Add an explicit, empty string column for the forest plot space
-tr3_plot$` ` <- paste(rep(" ", 16), collapse = " ")
-
-# 3. Clean repetitive labels for the table display
-tr3_plot$`Cohort` <- ifelse(duplicated(tr3_plot$`Cohort`), "", tr3_plot$`Cohort`)
-tr3_plot$`First interruption` <- ifelse(duplicated(tr3_plot$`First interruption`), "", tr3_plot$`First interruption`)
-
-library(forestploter)
-
-# 4. Generate the plot
-p_dis_tr3 <- forest(
-  tr3_plot[, c("Cohort", "Dose adjustment\nafter interruption", 
-               "Episode, n", "% risk at 12 months\n(95% CI)", "% difference in 12-month\nrisk (95% CI)", " ")],
-  est   = tr3_plot$rd_pct,
-  lower = tr3_plot$rd_lower_pct,
-  upper = tr3_plot$rd_upper_pct,
-  ci_column = 6, # Points to the blank string column
-  ref_line = 0,
-  sizes = 0.6,
+# Generate Forest Plot
+p_rmst <- forest(
+  plot_data_rmst[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                     "Event-free days\nat 12 months (95% CI)", "Difference in days\n(95% CI)", " ")],
+  est = plot_data_rmst$RMST_diff, lower = plot_data_rmst$RMST_diff_lower, upper = plot_data_rmst$RMST_diff_upper,
+  ci_column = 6, 
+  ref_line = 0,          # Additive null for difference
   x_trans = "none",
-  xlim = c(-12.5, 12.5),
-  ticks_at = c(-10, -5, 0, 5, 10),
-  xlab = "Risk difference (%)",
-  arrow_lab = NULL, # More precise clinical language
-  title = "B. Comparative risk of treatment discontinuation among dose adjustment groups\n    after first interruption of 5-14 days\n",
-  nudge_y = 0.02,
-  theme = forest_theme(
-    base_size = 14,
-    ci_pch = 15,
-    ci_lwd = 1.7,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-    arrow_length = 0.05,
-    arrow_gp = gpar(fontsize = 11, lwd = 0.7),
-    xlab_adjust = c("refline", "center")
-  )
+  xlim = c(-45, 45),     # IMPORTANT: Adjust this wider if any RMST bounds exceed +/- 45 days
+  ticks_at = c(-40, -20, 0, 20, 40),
+  xlab = "Difference in event-free days",
+  title = "A. Restricted mean survival time for treatment discontinuation\n    after first interruption of 3-4 days\n",
+  theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       xlab_adjust = c("refline", "center"))
 )
 
+# Add Legend
+txt_rmst <- "Positive difference indicates more days retained in treatment.<br>CI: compatibility intervals"
+p_rmst_final <- add_grob(p_rmst, row = nrow(plot_data_rmst)+2, col = 1:2, order = "background", 
+                         gb_fn = gridtext::richtext_grob, text = txt_rmst, gp = gpar(fontsize = 11), 
+                         hjust = 0, vjust = 1, halign = 0, valign = 1, x = unit(0, "npc"), y = unit(1, "npc"))
 
-
-txt <- "Risk. cumulative incidence<br>CI. compatibility ('confidence') intervals"
-
-p_dis_tr3_1 <- add_grob(p_dis_tr3, 
-                        row = nrow(tr3_plot)+2, 
-                        col = 1:2,
-                        order = "background",
-                        gb_fn = gridtext::richtext_grob,
-                        text = txt,
-                        gp = gpar(fontsize = 11),
-                        hjust = 0, vjust = 1, halign = 0, valign = 1,
-                        x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/", "Figure3_B_12m.jpg"),
-     width = 3500,  height = 1400, res = 300)
-p_dis_tr3_1
+jpeg(paste0(RES_DIR, "Figures/", "eFigure_A_12m_RMST.jpg"), width = 3500, height = 1400, res = 300)
+p_rmst_final
 dev.off()
+
+
+## eFigure B: met 5-14: dis: rmst at 365 day ###########
+risk_at <- 365
+
+# Build Data for Trial 2
+tr3_first_rmst <- extract_rmst_data(risk_tr3$first$dis$ci, outcome = "dis",
+                                    dat_tr3_first$data_weights, risk_at, 
+                                    cohort_label = "First episode", int_label = "5-14 days")
+tr3_all_rmst   <- extract_rmst_data(risk_tr3$all$dis$ci, outcome = "dis", 
+                                    dat_tr3_all$data_weights, risk_at, 
+                                    cohort_label = "Any episode", int_label = "5-14 days")
+
+plot_data_rmst <- bind_rows(tr3_first_rmst, tr3_all_rmst) %>%
+  mutate(
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    RMST_diff = ifelse(trt_group == "No dose change", NA, RMST_diff),
+    RMST_diff_lower = ifelse(trt_group == "No dose change", NA, RMST_diff_lower),
+    RMST_diff_upper = ifelse(trt_group == "No dose change", NA, RMST_diff_upper),
+    Cohort = ifelse(duplicated(Cohort), "", Cohort),
+    ` ` = paste(rep(" ", 16), collapse = " ") # Empty canvas column
+  ) %>%
+  rename(
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode, n` = "Episode",
+    `Event-free days\nat 12 months (95% CI)` = "rmst_disp",
+    `Difference in days\n(95% CI)` = "diff_disp"
+  )
+
+# Generate Forest Plot
+p_rmst <- forest(
+  plot_data_rmst[, c("Cohort", "Dose adjustment\nafter interruption", "Episode, n", 
+                     "Event-free days\nat 12 months (95% CI)", "Difference in days\n(95% CI)", " ")],
+  est = plot_data_rmst$RMST_diff, lower = plot_data_rmst$RMST_diff_lower, upper = plot_data_rmst$RMST_diff_upper,
+  ci_column = 6, 
+  ref_line = 0,          # Additive null for difference
+  x_trans = "none",
+  xlim = c(-45, 45),     # IMPORTANT: Adjust this wider if any RMST bounds exceed +/- 45 days
+  ticks_at = c(-40, -20, 0, 20, 40),
+  xlab = "Difference in event-free days",
+  title = "B. Restricted mean survival time for treatment discontinuation\n    after first interruption of 5-14 days\n",
+  theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       xlab_adjust = c("refline", "center"))
+)
+
+# Add Legend
+txt_rmst <- "Positive difference indicates more days retained in treatment.<br>CI: compatibility ('confidence') intervals"
+p_rmst_final <- add_grob(p_rmst, row = nrow(plot_data_rmst)+2, col = 1:2, order = "background", 
+                         gb_fn = gridtext::richtext_grob, text = txt_rmst, gp = gpar(fontsize = 11), 
+                         hjust = 0, vjust = 1, halign = 0, valign = 1, x = unit(0, "npc"), y = unit(1, "npc"))
+
+jpeg(paste0(RES_DIR, "Figures/", "eFigure_B_12m_RMST.jpg"), width = 3500, height = 1400, res = 300)
+p_rmst_final
+dev.off()
+
 
 
 
