@@ -30,7 +30,35 @@ library(tidyverse)
 library(forestploter)
 library(grid)
 
-# ── 1. UPDATED EXTRACTION FUNCTIONS (Cohort Dropped) ──────────────────────────
+compute_summary_stats_timewin <- function(Dat, 
+                                          time_var = "time_od_acute", 
+                                          event_var = "sens_od_acute",
+                                          weight_var = "wt_trunc",
+                                          trt_var = "trt",
+                                          max_time = 90) {
+  
+  library(dplyr)
+  library(rlang)
+  
+  Dat %>%
+    # Restrict to events within time window
+    mutate(
+      event_in_window = ifelse(!!sym(time_var) <= max_time, !!sym(event_var), 0)
+    ) %>%
+    group_by(!!sym(trt_var)) %>%
+    summarise(
+      Episode = n(),
+      Weighted_Episode = sum(!!sym(weight_var), na.rm = TRUE),
+      Event = sum(event_in_window, na.rm = TRUE),  # Events within time window
+      Weighted_event = sum(!!sym(weight_var) * event_in_window, na.rm = TRUE),
+      Total_PY = sum(!!sym(weight_var) * !!sym(time_var), na.rm = TRUE) / 52.17857,
+      Rate_PY = Weighted_event / Total_PY,
+      Rate_100PY = Rate_PY * 100,
+      .groups = 'drop'
+    ) %>%
+    select(trt_var, Episode, Event, Rate_100PY)
+}
+
 
 extract_rd_data <- function(risk_obj, dat_weights, max_time, outcome = "od", 
                             ref_name = "no reversion", int_label) {
@@ -119,10 +147,9 @@ extract_rmst_data <- function(risk_obj, dat_weights, max_time, outcome = "dis",
 }
 
 
-# ── 2. FIGURE 2: RISK DIFFERENCES (Any Episode Cohort) ────────────────────────
+# 2. FIGURE 2: RISK DIFFERENCES #################
 
-# --- FIGURE 2A: Overdose Risk Difference (90 Days) ---
-risk_at_od <- 90
+risk_at_od <- 30
 
 tr2_od_rd <- extract_rd_data(risk_tr2$all$od$ci, dat_tr2_all$data_weights, risk_at_od, 
                              outcome = "od", int_label = "3-4 days")
@@ -144,25 +171,25 @@ plot_data_2a <- bind_rows(tr2_od_rd, tr3_od_rd) %>%
   ) %>%
   rename(
     `Dose adjustment\nafter interruption` = "trt_group",
-    `Episode, n` = "Episode",
-    `% risk at 3 months\n(95% CI)` = "abs_risk_disp",
+    `Episode at risk\nat reinitiation, n` = "Episode",
+    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
     `Risk Difference (%)\n(95% CI)` = "rd_disp"
   )
 
 p_2a <- forest(
-  plot_data_2a[, c("Interruption", "Dose adjustment\nafter interruption", "Episode, n", 
-                   "% risk at 3 months\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_2a[, c("Interruption", "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
+                   "% risk at 1 month\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
   est = plot_data_2a$rd_pct, lower = plot_data_2a$rd_lower_pct, upper = plot_data_2a$rd_upper_pct,
   ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-2.5, 2.5), ticks_at = c(-2, -1, 0, 1, 2),
   xlab = "Risk difference (%)",
-  title = "A. Absolute difference in risk of overdose-related acute care visits (3 months)\n",
+  title = "A. Difference in risk of overdose-related acute care visits\n",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
 )
 
 p_2a_final <- add_grob(p_2a, row = nrow(plot_data_2a) + 2, col = 1:2, order = "background", 
-                       gb_fn = gridtext::richtext_grob, text = "Risk: cumulative incidence<br>CI: compatibility intervals", 
+                       gb_fn = gridtext::richtext_grob, text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
                        x = unit(0, "npc"), y = unit(1, "npc"))
 
@@ -171,7 +198,7 @@ p_2a_final
 dev.off()
 
 
-# --- FIGURE 2B: Discontinuation Risk Difference (365 Days) ---
+# FIGURE 2B: Discontinuation Risk Difference (365 Days) 
 risk_at_dis <- 365
 
 tr2_dis_rd <- extract_rd_data(risk_tr2$all$dis$ci, dat_tr2_all$data_weights, risk_at_dis, 
@@ -194,25 +221,25 @@ plot_data_2b <- bind_rows(tr2_dis_rd, tr3_dis_rd) %>%
   ) %>%
   rename(
     `Dose adjustment\nafter interruption` = "trt_group",
-    `Episode, n` = "Episode",
+    `Episode at risk\nat reinitiation, n` = "Episode",
     `% risk at 12 months\n(95% CI)` = "abs_risk_disp",
     `Risk Difference (%)\n(95% CI)` = "rd_disp"
   )
 
 p_2b <- forest(
-  plot_data_2b[, c("Interruption", "Dose adjustment\nafter interruption", "Episode, n", 
+  plot_data_2b[, c("Interruption", "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
                    "% risk at 12 months\n(95% CI)", "Risk Difference (%)\n(95% CI)", " ")],
   est = plot_data_2b$rd_pct, lower = plot_data_2b$rd_lower_pct, upper = plot_data_2b$rd_upper_pct,
   ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-12.5, 12.5), ticks_at = c(-10, -5, 0, 5, 10),
   xlab = "Risk difference (%)",
-  title = "B. Absolute difference in risk of treatment discontinuation (12 months)\n",
+  title = "B. Difference in risk of treatment discontinuation\n",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
 )
 
 p_2b_final <- add_grob(p_2b, row = nrow(plot_data_2b) + 2, col = 1:2, order = "background", 
-                       gb_fn = gridtext::richtext_grob, text = "Risk: cumulative incidence<br>CI: compatibility intervals", 
+                       gb_fn = gridtext::richtext_grob, text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
                        x = unit(0, "npc"), y = unit(1, "npc"))
 
@@ -221,10 +248,9 @@ p_2b_final
 dev.off()
 
 
-# ── 3. FIGURE 3: RMST DIFFERENCES (Any Episode Cohort) ────────────────────────
-
+# 3. FIGURE 3: RMST DIFFERENCES ###############
 # --- FIGURE 3A: Overdose RMST ---
-# Assumes predict_cuminc_rmst was run with rmst_tau = 365 for OD
+
 risk_at_rmst_od <- 365 
 
 tr2_od_rmst <- extract_rmst_data(risk_tr2$all$od$ci, dat_tr2_all$data_weights, risk_at_rmst_od, 
@@ -247,24 +273,24 @@ plot_data_3a <- bind_rows(tr2_od_rmst, tr3_od_rmst) %>%
   ) %>%
   rename(
     `Dose adjustment\nafter interruption` = "trt_group",
-    `Episode, n` = "Episode",
+    `Episode at risk\nat reinitiation, n` = "Episode",
     `Event-free days\nat 12 months (95% CI)` = "rmst_disp",
     `Difference in days\n(95% CI)` = "diff_disp"
   )
 
 p_3a <- forest(
-  plot_data_3a[, c("Interruption", "Dose adjustment\nafter interruption", "Episode, n", 
+  plot_data_3a[, c("Interruption", "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
                    "Event-free days\nat 12 months (95% CI)", "Difference in days\n(95% CI)", " ")],
   est = plot_data_3a$RMST_diff, lower = plot_data_3a$RMST_diff_lower, upper = plot_data_3a$RMST_diff_upper,
   ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-5, 5), ticks_at = c(-4, -2, 0, 2, 4), # Narrower bounds expected for rare OD
   xlab = "Difference in event-free days",
-  title = "A. Restricted mean survival time for overdose-related acute care visits (12-month horizon)\n",
+  title = "A. Restricted mean survival time for overdose-related acute care visits\n",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
 )
 
-txt_rmst <- "Positive difference indicates more event-free days.<br>CI: compatibility intervals"
+txt_rmst <- "Positive difference indicates more event-free days.<br>CI: compatibility ('confidence') intervals"
 p_3a_final <- add_grob(p_3a, row = nrow(plot_data_3a)+2, col = 1:2, order = "background", 
                        gb_fn = gridtext::richtext_grob, text = txt_rmst, gp = gpar(fontsize = 11), 
                        hjust = 0, vjust = 1, halign = 0, valign = 1, x = unit(0, "npc"), y = unit(1, "npc"))
@@ -274,7 +300,7 @@ p_3a_final
 dev.off()
 
 
-# --- FIGURE 3B: Discontinuation RMST (365 Days) ---
+# FIGURE 3B: Discontinuation RMST (365 Days) 
 risk_at_rmst_dis <- 365
 
 tr2_dis_rmst <- extract_rmst_data(risk_tr2$all$dis$ci, dat_tr2_all$data_weights, risk_at_rmst_dis, 
@@ -297,18 +323,18 @@ plot_data_3b <- bind_rows(tr2_dis_rmst, tr3_dis_rmst) %>%
   ) %>%
   rename(
     `Dose adjustment\nafter interruption` = "trt_group",
-    `Episode, n` = "Episode",
+    `Episode at risk\nat reinitiation, n` = "Episode",
     `Event-free days\nat 12 months (95% CI)` = "rmst_disp",
     `Difference in days\n(95% CI)` = "diff_disp"
   )
 
 p_3b <- forest(
-  plot_data_3b[, c("Interruption", "Dose adjustment\nafter interruption", "Episode, n", 
+  plot_data_3b[, c("Interruption", "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
                    "Event-free days\nat 12 months (95% CI)", "Difference in days\n(95% CI)", " ")],
   est = plot_data_3b$RMST_diff, lower = plot_data_3b$RMST_diff_lower, upper = plot_data_3b$RMST_diff_upper,
   ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-45, 45), ticks_at = c(-40, -20, 0, 20, 40),
   xlab = "Difference in event-free days",
-  title = "B. Restricted mean survival time for treatment discontinuation (12-month horizon)\n",
+  title = "Restricted mean survival time for treatment discontinuation\n",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
