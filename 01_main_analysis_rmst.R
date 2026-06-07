@@ -187,7 +187,7 @@ plot_tr2_all_final <- ggdraw(row_tr2_all) +
   draw_label("Note: SMD ≥ 0.1 included in outcome models.",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
-jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr2_all.jpg"),
+jpeg(paste0(RES_DIR, "Figures/June09/", "smd_love_plots_tr2_all.jpg"),
      width = 4200, height = 2200, res = 300)
 print(plot_tr2_all_final)
 dev.off()
@@ -292,7 +292,7 @@ plot_tr3_all_final <- ggdraw(row_tr3_all) +
   draw_label("Note: SMD ≥ 0.1 included in outcome models",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
-jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr3_all.jpg"),
+jpeg(paste0(RES_DIR, "Figures/June09/", "smd_love_plots_tr3_all.jpg"),
      width = 4200, height = 2200, res = 300)
 print(plot_tr3_all_final)
 dev.off()
@@ -302,6 +302,11 @@ cat("  ✓ Trial 2, First-interruption-in-any-episode SMD figure saved.\n")
 
 
 
+
+
+# 7. RMST & CUMULATIVE INCIDENCE ####
+# Risk curves and confidence intervals for overdose and discontinuation
+# Two trials × Two cohorts
 predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
                                 cluster_var, samples = 1000, conf_int = TRUE,
                                 ref_group = "no reversion", wt_type="wt_trunc",
@@ -471,9 +476,9 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
 }
 
 
-# 7. RMST & CUMULATIVE INCIDENCE ####
-# Risk curves and confidence intervals for overdose and discontinuation
-# Two trials × Two cohorts
+
+
+
 
 cat("\n=== Computing Cumulative Incidence ===\n")
 
