@@ -1,3 +1,195 @@
+library(tidyverse)
+library(haven)
+library(nnet)
+library(splines)
+library(sandwich)
+library(mvtnorm)
+library(tableone)
+library(survey)
+library(cobalt)
+library(patchwork)
+library(cowplot)
+
+source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")   # ps_model_wt(), predict_cuminc(), expand_person_period()
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+dir.create(paste0(RES_DIR, "PScore"),   showWarnings = FALSE)
+dir.create(paste0(RES_DIR, "Risk"),     showWarnings = FALSE)
+dir.create(paste0(RES_DIR, "Tables"),   showWarnings = FALSE)
+dir.create(paste0(RES_DIR, "Figures"),  showWarnings = FALSE)
+
+
+# ── Shared settings ────────────────────────────────────────────────────────────
+TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
+
+out_vars   <- c("sens_discont", "time_discont",
+                "sens_od_acute", "time_od_acute",
+                "sens_all_acute", "time_all_acute")
+
+clust_vars <- c("studyid_rev", "episode", "time0")
+
+baselinevars <- c(
+  "sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
+  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
+  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
+  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
+  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss"
+)
+continuous_vars <- c("ddose_prev", "year", "ret_length")
+
+# Human-readable variable labels for Table 1 and love plots
+VAR_LABELS <- c(
+  sexM          = "Sex: Male",
+  age_lt30      = "Age category: 18-29",
+  age_30_39     = "Age category: 30-39",
+  age_40_49     = "Age category: 40-49",
+  age_ge50      = "Age category: 50+",
+  rural         = "Region: Rural",
+  year          = "Year of reinitiation date",
+  po_preOUD     = "Opioid dispensations other than OAT prior to the first OUD indication",
+  phy_att_gr2   = "Attachment to the prescriber who reinitiated OAT",
+  social_assist = "Receipt of income assistance in the past year",
+  ret_length    = "Duration of OAT episode before time zero",
+  home_grp_b    = "Unstable housing in past 5 years",
+  incar_grp_bl  = "Incarcerated in the past year",
+  drug_acute    = "Drug-related acute care visits in the past month",
+  cci_gt0       = "Charlson Comorbidity Index (>0)",
+  copd_asthma   = "Asthma or COPD in the past year",
+  sed_psy_med   = "Dispensations of psychiatric or sedative medication in the past month",
+  po            = "Dispensations opioid other than OAT in the past month",
+  sud           = "Other substance use disorder",
+  aud           = "Alcohol use disorder",
+  smd           = "Serious mental disorder",
+  hcv           = "Hepatitis C",
+  tob           = "Tobacco use disorder (past year)",
+  udt           = "Urine drug test in the past month",
+  ddose_prev    = "Last daily dose",
+  clin_size_b   = "Large practice size (>300 clients)",
+  virtual_care  = "Virtual care in past month",
+  pss           = "Prescriber safer supply",
+  prior_gap     = "Total OAT interruptions since initiation",
+  prior_episode = "Number of prior episode"
+)
+
+# Shared pre-processing: collapse all reduction categories into one
+clean_trt <- function(dat) {
+  dat |>
+    mutate(
+      trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456)
+    ) |>
+    rename(trt = trt_s456) |>
+    filter(trt %in% TRT_LEVELS) |>
+    mutate(trt = factor(trt, levels = TRT_LEVELS))
+}
+
+clean_trt_all <- function(dat) {
+  dat |>
+    mutate(
+      trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456)
+    ) |>
+    rename(trt = trt_s456) |>
+    filter(trt %in% TRT_LEVELS) |>
+    mutate(trt = factor(trt, levels = TRT_LEVELS),
+           prior_episode = as.numeric(episode - 1)) |>
+    group_by(studyid_rev, episode) |>
+    mutate(
+      prior_gap     = cumsum(gap_days),
+      prior_gap_num = row_number()
+    ) %>%
+    ungroup()
+  
+}
+
+# 1. LOAD AND FILTER RAW SAS DATA #########
+
+# First-interruption-in-first-episode
+raw_first <- read_sas(file.path(DATA_DIR, "TT_analytic_incid_sens_nw_m.sas7bdat"))
+
+dat_tr2_first <- raw_first |>
+  filter(trial_gap %in% 3:4) |>
+  clean_trt()
+
+dat_tr3_first <- raw_first |>
+  filter(trial_cat == "5-14") |>
+  clean_trt()
+
+rm(raw_first); gc()
+
+# First-interruption-in-any-episode 
+raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+
+dat_tr2_all <- raw_all |>
+  filter(trial_gap %in% 3:4) |>
+  clean_trt_all() 
+
+dat_tr3_all <- raw_all |>
+  filter(trial_cat == "5-14") |>
+  clean_trt_all()
+
+
+rm(raw_all); gc()
+
+
+
+# 2. PROPENSITY SCORE WEIGHTS ################
+
+## MET 3-4 days: first-interruption-in-first-episode #####
+
+ps_tr2_first <- ps_model_wt(
+  dat             = dat_tr2_first,
+  exposure        = "trt",
+  baselinevars    = baselinevars,
+  continuous_vars = continuous_vars,
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr2_first, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
+
+## MET 3-4 days: first-interruption-in-any-episode #####
+
+ps_tr2_all <- ps_model_wt(
+  dat             = dat_tr2_all,
+  exposure        = "trt",
+  baselinevars    = c(baselinevars, "prior_episode"),
+  continuous_vars = c(continuous_vars, "prior_episode"),
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr2_all, paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
+
+
+
+
+## MET 5-14 days: first-interruption-in-first-episode #####
+ps_tr3_first <- ps_model_wt(
+  dat             = dat_tr3_first,
+  exposure        = "trt",
+  baselinevars    = baselinevars,
+  continuous_vars = continuous_vars,
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr3_first, paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
+
+## MET 5-14 days: first-interruption-in-any-episode #####
+ps_tr3_all <- ps_model_wt(
+  dat             = dat_tr3_all,
+  exposure        = "trt",
+  baselinevars    = c(baselinevars, "prior_episode"),
+  continuous_vars = c(continuous_vars, "prior_episode"),
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr3_all, paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
+
+
+
 # 5. SMD LOVE PLOTS ############
 # Each trial (3-4 days, 5-14 days) one cohort
 #   - First-interruption-in-any-episode
