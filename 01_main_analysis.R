@@ -100,7 +100,7 @@ clean_trt_all <- function(dat) {
     rename(trt = trt_s456) |>
     filter(trt %in% TRT_LEVELS) |>
     mutate(trt = factor(trt, levels = TRT_LEVELS),
-           prior_episode = episode - 1) |>
+           prior_episode = as.numeric(episode - 1)) |>
     group_by(studyid_rev, episode) |>
     mutate(
       prior_gap     = cumsum(gap_days),
@@ -162,7 +162,7 @@ ps_tr2_all <- ps_model_wt(
   dat             = dat_tr2_all,
   exposure        = "trt",
   baselinevars    = c(baselinevars, "prior_episode"),
-  continuous_vars = continuous_vars,
+  continuous_vars = c(continuous_vars, "prior_episode"),
   out_vars        = out_vars,
   clust_vars      = clust_vars
 )
@@ -189,7 +189,7 @@ ps_tr3_all <- ps_model_wt(
   dat             = dat_tr3_all,
   exposure        = "trt",
   baselinevars    = c(baselinevars, "prior_episode"),
-  continuous_vars = continuous_vars,
+  continuous_vars = c(continuous_vars, "prior_episode"),
   out_vars        = out_vars,
   clust_vars      = clust_vars
 )

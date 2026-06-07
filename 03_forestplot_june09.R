@@ -347,3 +347,59 @@ p_3b_final <- add_grob(p_3b, row = nrow(plot_data_3b)+2, col = 1:2, order = "bac
 jpeg(paste0(RES_DIR, "Figures/June09/", "Figure3_B_Discont_RMST.jpg"), width = 3500, height = 1400, res = 300)
 p_3b_final
 dev.off()
+
+
+
+
+# % for the text ##########
+library(purrr)
+
+cat("\n========================================================\n")
+cat(" MANUSCRIPT TEXT EXTRACTION (COPY AND PASTE INTO WORD)\n")
+cat("========================================================\n")
+
+# Helper function to generate sentences
+print_manuscript_text <- function(df, metric_name, estimate_col) {
+  df %>%
+    # Filter out the reference group so we only get the active comparisons
+    filter(`Dose adjustment` != "No dose change") %>%
+    mutate(
+      # Clean up the stratum labels for text
+      clean_stratum = ifelse(Stratum == "", NA, Stratum)
+    ) %>%
+    fill(clean_stratum, .direction = "down") %>%
+    mutate(
+      sentence = sprintf(
+        "For patients with %s retention, following a %s, the %s for the '%s' group compared to no dose change was %s.",
+        clean_stratum, 
+        tolower(Interruption), 
+        metric_name, 
+        `Dose adjustment`, 
+        !!sym(estimate_col)
+      )
+    ) %>%
+    pull(sentence) %>%
+    walk(~cat("  -", ., "\n"))
+}
+
+cat("\n--- 1. OVERDOSE RISK DIFFERENCES (90 DAYS) ---\n")
+print_manuscript_text(
+  data_2a, 
+  metric_name = "absolute risk difference", 
+  estimate_col = "Risk Difference (%)\n(95% CI)"
+)
+
+cat("\n--- 2. DISCONTINUATION RISK DIFFERENCES (365 DAYS) ---\n")
+print_manuscript_text(
+  data_2b, 
+  metric_name = "absolute risk difference", 
+  estimate_col = "Risk Difference (%)\n(95% CI)"
+)
+
+cat("\n--- 3. DISCONTINUATION RMST DIFFERENCES (365 DAYS) ---\n")
+print_manuscript_text(
+  data_3b, 
+  metric_name = "difference in event-free days", 
+  estimate_col = "Difference in days\n(95% CI)"
+)
+cat("\n========================================================\n")
