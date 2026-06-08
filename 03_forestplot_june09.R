@@ -502,47 +502,65 @@ build_event_table <- function(dat, time_var = "time_od_acute", event_var = "sens
                          "no reversion" = "No dose change",
                          "1-<50%" = "<50% reduction",
                          ">=50%/<=40mg" = "\u226550% reduction/\u226440mg",
-                         "increase" = "Dose increase"),
-      # Reverse factor levels so "No dose change" sits at the top of the table
-      trt_label = factor(trt_label, levels = rev(names(trt_colors_km))) 
+                         "increase" = "Dose increase")
     )
   
   breaks_x <- c(0, 30, 90, 180, 270, 365)
   
-  # Calculate cumulative events at exactly the specified breaks
-  table_df <- purrr::map_dfr(breaks_x, function(t) {
+  # A. Calculate cumulative events per treatment (with <10 suppression)
+  events_df <- purrr::map_dfr(breaks_x, function(t) {
     dat %>%
       group_by(trt_label) %>%
       summarise(
         time = t,
-        # Explicitly force 0 events at t=0
-        raw_events = ifelse(t == 0, 0, sum(!!sym(time_var) <= t & !!sym(event_var) == 1, na.rm = TRUE)),
+        raw_count = ifelse(t == 0, 0, sum(!!sym(time_var) <= t & !!sym(event_var) == 1, na.rm = TRUE)),
         .groups = "drop"
       )
   }) %>%
     mutate(
-      # Safely apply privacy suppression: Keep 0 at day 0. Mask 1-9. Show >=10.
-      events_label = case_when(
+      label_text = case_when(
         time == 0 ~ "0",
-        raw_events > 0 & raw_events < 10 ~ "<10",
-        TRUE ~ as.character(raw_events)
+        raw_count > 0 & raw_count < 10 ~ "<10",
+        TRUE ~ as.character(raw_count)
       )
     )
   
+  # B. Calculate total episodes at risk at time t
+  at_risk_df <- purrr::map_dfr(breaks_x, function(t) {
+    dat %>%
+      summarise(
+        time = t,
+        # At risk means they have not experienced the event or been censored prior to time t
+        raw_count = sum(!!sym(time_var) >= t, na.rm = TRUE),
+        .groups = "drop"
+      )
+  }) %>%
+    mutate(
+      trt_label = "Total episodes at risk",
+      label_text = as.character(raw_count) # We don't apply <10 to the total at risk
+    )
+  
+  # C. Combine and order the factors so "Total at risk" goes to the bottom
+  table_levels <- c(names(trt_colors_km), "Total episodes at risk")
+  
+  table_df <- bind_rows(events_df, at_risk_df) %>%
+    mutate(
+      trt_label = factor(trt_label, levels = rev(table_levels)) 
+    )
+  
   # Create text-based ggplot table
-  ggplot(table_df, aes(x = time, y = trt_label, label = events_label)) +
+  ggplot(table_df, aes(x = time, y = trt_label, label = label_text)) +
     geom_text(size = 4.5, color = "black") +
     scale_x_continuous(limits = c(0, 365), breaks = breaks_x) +
-    labs(y = NULL, x = "Cumulative events") +
+    labs(x = NULL, y = NULL, title = "Risk table") + # Removed y-axis title since row labels are self-explanatory
     theme_minimal(base_size = 14) +
     theme(
       panel.grid   = element_blank(),
       axis.line    = element_blank(),
       axis.ticks   = element_blank(),
-      axis.text.x  = element_blank(), # Hide x-axis text since main plot has it
-      #axis.title.x = element_blank(),
+      axis.text.x  = element_blank(), 
+      axis.title.y = element_text(color = "black", size = 13, angle=90),
       axis.text.y  = element_text(color = "black", size = 12),
-      axis.title.y = element_text(color = "black", size = 12, face = "bold", angle = 0, vjust = 0.5),
       plot.margin  = margin(t = 0, r = 5, b = 5, l = 5, unit = "pt")
     )
 }
@@ -586,21 +604,34 @@ dummy_plot <- p_km_tr2 +
 shared_legend <- cowplot::get_legend(dummy_plot)
 
 # 7. Assemble the vertical layout using Patchwork (FLATTENED)
+# Heights adjusted to 1.2 for the tables to accommodate the new At-Risk row
 final_km_composite <- p_km_tr2 / 
   p_tab_tr2 / 
   plot_spacer() / 
   p_km_tr3 / 
   p_tab_tr3 / 
   shared_legend +
-  plot_layout(heights = c(5, 1, 0.5, 5, 1, 0.5)) 
+  plot_layout(heights = c(5, 1.2, 0.5, 5, 1.2, 0.5)) 
 
 # 8. Save output
 jpeg(paste0(RES_DIR, "Figures/June09/eFigure4_Unadjusted_OD_KM_Vertical.jpg"), 
-     width = 3000, height = 4000, res = 300)
+     width = 3200, height = 4000, res = 300)
 print(final_km_composite)
 dev.off()
 
 ## discontinuation ##########
+
+cat("\n--- Trial 2: Discontinuation (Raw) ---\n")
+raw_dis_tr2 <- compute_raw_km_stats(dat_tr2_all$data_weights, 
+                                    time_var = "time_discont", 
+                                    event_var = "sens_discont")
+print(raw_dis_tr2, digits = 4, row.names = FALSE)
+
+cat("\n--- Trial 3: Discontinuation (Raw) ---\n")
+raw_dis_tr3 <- compute_raw_km_stats(dat_tr3_all$data_weights, 
+                                    time_var = "time_discont", 
+                                    event_var = "sens_discont")
+print(raw_dis_tr3, digits = 4, row.names = FALSE)
 
 
 
