@@ -77,7 +77,7 @@ clean_trt_all <- function(dat) {
     rename(trt = trt_s456) |>
     filter(trt %in% TRT_LEVELS) |>
     mutate(trt = factor(trt, levels = TRT_LEVELS),
-           prior_episode = episode - 1) |>
+           prior_episode = as.numeric(episode - 1)) |>
     group_by(studyid_rev, episode) |>
     mutate(
       prior_gap     = cumsum(gap_days),
@@ -99,22 +99,19 @@ dat_tr3_first <- raw_all |>
   clean_trt_all()
 
 
-# Combine datasets and define clinical epochs
+# Combine datasets and define clinical epochs (UPDATED TO TWO STRATA)
 df_explore_first <- bind_rows(
   dat_tr2_first %>% mutate(Trial = "Methadone interruption of 3-4 days"),
   dat_tr3_first %>% mutate(Trial = "Methadone interruption of 5-14 days")
 ) %>%
   mutate(
-    # Create the categorical epochs
+    # Create the categorical epochs (<= 30 vs > 30)
     ret_length_cat = case_when(
       ret_length <= 30 ~ "\u2264 30 days",
-      ret_length > 30 & ret_length <= 90 ~ "31-90 days",
-      ret_length > 90 ~ "> 90 days"
+      ret_length > 30 ~ "> 30 days"
     ),
     ret_length_cat = factor(ret_length_cat, 
-                            levels = c("\u2264 30 days", 
-                                       "31-90 days", 
-                                       "> 90 days")),
+                            levels = c("\u2264 30 days", "> 30 days")),
     
     # Calculate the amount of increase (since ddose_red is before - after, an increase is negative)
     increase_amount = ifelse(trt == "increase", abs(ddose_red), NA),
@@ -123,14 +120,14 @@ df_explore_first <- bind_rows(
     trt_detailed = case_when(
       trt == "no reversion" ~ "No dose change",
       trt == "1-<50%" ~ "<50% reduction",
-      trt == ">=50%/<=40mg" ~ "\u226550% reduction/\u226440mg*",
+      trt == ">=50%/<=40mg" ~ "\u226550% reduction/\u226440mg",
       trt == "increase" & increase_amount <= 10 ~ "Dose increase \u2264 10mg",
       trt == "increase" & increase_amount > 10 ~ "Dose increase > 10mg",
       TRUE ~ NA_character_
     ),
     trt_detailed = factor(trt_detailed, levels = c("No dose change", 
                                                    "<50% reduction", 
-                                                   "\u226550% reduction/\u226440mg*", 
+                                                   "\u226550% reduction/\u226440mg", 
                                                    "Dose increase \u2264 10mg", 
                                                    "Dose increase > 10mg"))
   )
@@ -139,21 +136,17 @@ df_explore_first <- bind_rows(
 trt_colors_detailed <- c(
   "No dose change" = "#000000",                   # Black
   "<50% reduction" = "#2CA02C",                   # Green
-  "\u226550% reduction/\u226440mg*" = "#FF7F0E",  # Orange
+  "\u226550% reduction/\u226440mg" = "#FF7F0E",  # Orange
   "Dose increase \u2264 10mg" = "#9467BD",        # Muted Purple
   "Dose increase > 10mg" = "#D62728"              # Dark Red
 )
 
 
-
-
-
 plot_ecdf_first <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) +
   stat_ecdf(geom = "step", size = 1.2) +
   
-  # Clinical anchor lines matching the bottom panel epochs
+  # Clinical anchor line matching the bottom panel epochs
   geom_vline(xintercept = 30, linetype = "dashed", color = "gray60") +
-  geom_vline(xintercept = 90, linetype = "dashed", color = "gray60") +
   
   scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(0, 1, 0.25)) +
@@ -176,7 +169,6 @@ plot_ecdf_first <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) 
     axis.text.y       = element_text(color = "black", size = 14),
     axis.title.y      = element_text(size = 14),
     legend.position = c(0.8, 0.2), # Inset legend
-    #legend.direction  = "horizontal",
     legend.title      = element_blank(),
     legend.text       = element_text(size = 14, color = "black"),
     legend.background = element_rect(fill = "white", color = "black"),
@@ -185,8 +177,6 @@ plot_ecdf_first <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) 
     strip.text        = element_text(face = "bold", size = 13)
     
   )
-
-
 
 
 plot_prop_first <- ggplot(df_explore_first, aes(x = ret_length_cat, fill = trt_detailed)) +
@@ -198,7 +188,7 @@ plot_prop_first <- ggplot(df_explore_first, aes(x = ret_length_cat, fill = trt_d
   
   labs(
     title = "B. Proportion of dose adjustment after first interruption in any OAT episode",
-    x = "\nDuration of OAT episode prior to the index interruption (in days)",
+    x = "\nDuration of OAT episode prior to the index interruption",
     y = "Proportion of dose adjustment strategy (%)"
   ) +
   
@@ -214,7 +204,6 @@ plot_prop_first <- ggplot(df_explore_first, aes(x = ret_length_cat, fill = trt_d
     axis.title.y      = element_text(size = 14),
     legend.position = "bottom",
     legend.title = element_blank(),
-    #legend.direction  = "horizontal",
     legend.text       = element_text(size = 14, color = "black"),
     legend.background = element_rect(fill = "white", color = "black"),
     legend.key        = element_blank(),
@@ -222,8 +211,6 @@ plot_prop_first <- ggplot(df_explore_first, aes(x = ret_length_cat, fill = trt_d
     strip.text        = element_text(face = "bold", size = 13)
     
   )
-
-
 
 
 # Combine the plots with patchwork
@@ -232,161 +219,21 @@ final_composite_first <- plot_ecdf_first / plot_spacer() / plot_prop_first +
 
 
 # Save the figure
-jpeg(paste0(RES_DIR, "Figures/Exploratory_Timing_Composite_first.jpg"), 
+jpeg(paste0(RES_DIR, "Figures/June09/Dist_of_interruptions_and_doses.jpg"), 
      width = 3900, height = 4600, res = 300)
 print(final_composite_first)
 dev.off()
 
 
+df_explore_first %>% count(trt)
 
 
-# 2. Any-interruption-in-any-episode ############
-raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_rprev_sens_nw_m.sas7bdat"))
-
-dat_tr2_all <- raw_all |>
-  filter(trial_gap %in% 3:4) |>
-  clean_trt_all() 
-
-dat_tr3_all <- raw_all |>
-  filter(trial_cat == "5-14") |>
-  clean_trt_all()
-
-# Combine datasets and define clinical epochs
-df_explore_all <- bind_rows(
-  dat_tr2_all %>% mutate(Trial = "Methadone interruption of 3-4 days"),
-  dat_tr3_all %>% mutate(Trial = "Methadone interruption of 5-14 days")
-) %>%
-  mutate(
-    # Create the categorical epochs
-    ret_length_cat = case_when(
-      ret_length <= 30 ~ "\u2264 30 days",
-      ret_length > 30 & ret_length <= 90 ~ "31-90 days",
-      ret_length > 90 ~ "> 90 days"
-    ),
-    ret_length_cat = factor(ret_length_cat, 
-                            levels = c("\u2264 30 days", 
-                                       "31-90 days", 
-                                       "> 90 days")),
-    
-    # Calculate the amount of increase (since ddose_red is before - after, an increase is negative)
-    increase_amount = ifelse(trt == "increase", abs(ddose_red), NA),
-    
-    # Format the dose adjustment strategies into 5 detailed categories
-    trt_detailed = case_when(
-      trt == "no reversion" ~ "No dose change",
-      trt == "1-<50%" ~ "<50% reduction",
-      trt == ">=50%/<=40mg" ~ "\u226550% reduction/\u226440mg*",
-      trt == "increase" & increase_amount <= 10 ~ "Dose increase \u2264 10mg",
-      trt == "increase" & increase_amount > 10 ~ "Dose increase > 10mg",
-      TRUE ~ NA_character_
-    ),
-    trt_detailed = factor(trt_detailed, levels = c("No dose change", 
-                                                   "<50% reduction", 
-                                                   "\u226550% reduction/\u226440mg*", 
-                                                   "Dose increase \u2264 10mg", 
-                                                   "Dose increase > 10mg"))
-  )
-
-# Define the new 5-color palette (Using two distinct reds for the increases)
-trt_colors_detailed <- c(
-  "No dose change" = "#000000",                   # Black
-  "<50% reduction" = "#2CA02C",                   # Green
-  "\u226550% reduction/\u226440mg*" = "#FF7F0E",  # Orange
-  "Dose increase \u2264 10mg" = "#9467BD",        # Muted Purple
-  "Dose increase > 10mg" = "#D62728"              # Dark Red
-)
+## % ##############
+df_explore_first %>% 
+  filter(Trial == "Methadone interruption of 5-14 days") %>% 
+  count(trt_detailed)
 
 
-
-
-
-plot_ecdf_all <- ggplot(df_explore_all, aes(x = ret_length, color = Trial)) +
-  stat_ecdf(geom = "step", size = 1.2) +
-  
-  # Clinical anchor lines matching the bottom panel epochs
-  geom_vline(xintercept = 30, linetype = "dashed", color = "gray60") +
-  geom_vline(xintercept = 90, linetype = "dashed", color = "gray60") +
-  
-  scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(0, 1, 0.25)) +
-  scale_color_manual(values = c("Methadone interruption of 3-4 days" = "#1f78b4", "Methadone interruption of 5-14 days" = "#33a02c")) +
-  
-  labs(
-    title = "A. Cumulative proportion of any interruptions occurred in any OAT episode",
-    x = "Duration of OAT episode prior to the index interruption (in days)",
-    y = "Cumulative proportion first interruptions (%)"
-  ) +
-  
-  theme_minimal(base_size = 14) +
-  theme(
-    panel.grid        = element_blank(),
-    axis.line         = element_line(color = "black"),
-    axis.ticks.length = unit(0.2, "cm"),
-    axis.ticks.y      = element_line(linewidth = 1.2, color = "black"),
-    axis.ticks.x      = element_line(linewidth = 1.2, color = "black"),
-    axis.text.x       = element_text(color = "black", size = 14),
-    axis.text.y       = element_text(color = "black", size = 14),
-    axis.title.y      = element_text(size = 14),
-    legend.position = c(0.8, 0.2), # Inset legend
-    #legend.direction  = "horizontal",
-    legend.title      = element_blank(),
-    legend.text       = element_text(size = 14, color = "black"),
-    legend.background = element_rect(fill = "white", color = "black"),
-    legend.key        = element_blank(),
-    strip.background  = element_rect(fill = "lightgray", color = NA),
-    strip.text        = element_text(face = "bold", size = 13)
-    
-  )
-
-
-
-
-plot_prop_all <- ggplot(df_explore_all, aes(x = ret_length_cat, fill = trt_detailed)) +
-  geom_bar(position = "fill", color = "black", alpha = 0.85, width = 0.7) +
-  
-  facet_wrap(~ Trial) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_manual(values = trt_colors_detailed) +
-  
-  labs(
-    title = "B. Proportion of dose adjustment after any interruptions during any OAT episode",
-    x = "\nDuration of OAT episode prior to the index interruption (in days)",
-    y = "Proportion of dose adjustment strategy (%)"
-  ) +
-  
-  theme_minimal(base_size = 14) +
-  theme(
-    panel.grid        = element_blank(),
-    axis.line         = element_line(color = "black"),
-    axis.ticks.length = unit(0.2, "cm"),
-    axis.ticks.y      = element_line(linewidth = 1.2, color = "black"),
-    axis.ticks.x      = element_line(linewidth = 1.2, color = "black"),
-    axis.text.x       = element_text(color = "black", size = 14),
-    axis.text.y       = element_text(color = "black", size = 14),
-    axis.title.y      = element_text(size = 14),
-    legend.position = "bottom",
-    legend.title = element_blank(),
-    #legend.direction  = "horizontal",
-    legend.text       = element_text(size = 14, color = "black"),
-    legend.background = element_rect(fill = "white", color = "black"),
-    legend.key        = element_blank(),
-    strip.background  = element_rect(fill = "lightgray", color = NA),
-    strip.text        = element_text(face = "bold", size = 13)
-    
-  )
-
-
-
-
-# Combine the plots with patchwork
-final_composite_all <- plot_ecdf_all / plot_spacer() / plot_prop_all +
-  plot_layout(heights = c(1, 0.05, 1.2))
-
-
-# Save the figure
-jpeg(paste0(RES_DIR, "Figures/Exploratory_Timing_Composite_any.jpg"), 
-     width = 3900, height = 4600, res = 300)
-print(final_composite_all)
-dev.off()
-
-
+t = c(620, 199, 68, 37)
+gt10=c(199, 37)
+sum(gt10)/sum(t)
