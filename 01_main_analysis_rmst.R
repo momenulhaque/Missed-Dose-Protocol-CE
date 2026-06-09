@@ -714,6 +714,7 @@ risk$tr2$first$od$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc", rmst_tau = 365
 )
 
+
 risk$tr2$first$od$ci <- predict_cuminc_rmst(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),

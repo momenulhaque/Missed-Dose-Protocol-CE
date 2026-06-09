@@ -77,7 +77,7 @@ add_strata <- function(dat) {
 cat("Loading and stratifying 'Any episode' cohort data...\n")
 
 raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
-
+names(raw_all)
 dat_tr2_strat <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_all() |> add_strata()
 dat_tr3_strat <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_all() |> add_strata()
 rm(raw_all); gc()

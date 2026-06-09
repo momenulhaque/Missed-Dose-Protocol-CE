@@ -1,3 +1,30 @@
+library(tidyverse)
+library(survival)
+library(haven)
+library(Publish)
+library(ggplot2)
+library(survminer)
+library(twang)
+require(tableone)
+require(survey)
+library(lubridate)
+library(naniar) # For missing value
+library(survival)
+library(cobalt)
+library(autoCovariateSelection)
+library(glmnet)
+library(parallel)
+library(doParallel)
+library(ranger)
+library(splines)
+library(marginaleffects)
+library(sandwich)
+library(clubSandwich)
+library(CFsurvival)
+library(survSuperLearner)
+library(earth)
+library(randomForest)
+
 ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.99,
                         out_vars, clust_vars,
                         baselinevars = c("sexM", "age_lt30", "age_30_39",
@@ -72,6 +99,7 @@ ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.
 
   return(list(model = ps_fit, data_weights = model_data))
 }
+
 
 ps_model_lasso <- function(dat, exposure = "trt",
                            trunc_low  = 0.01, trunc_high = 0.99,
@@ -164,6 +192,90 @@ ps_model_lasso <- function(dat, exposure = "trt",
     lambda_min = cv_fit$lambda.min
   ))
 }
+
+ps_model_xgb <- function(dat=ps_fit$data_weights,
+                         exposure = "trt", 
+                         trunc_low = 0, 
+                         trunc_high = 0.99, 
+                         out_vars, clust_vars,
+                         baselinevars,
+                         continuous_vars = continuous_vars,
+                         emp_vars=vars.emp,
+                         num_class = NULL) {
+  
+  library(dplyr)
+  library(xgboost)
+  
+  dat1 <- dat %>%
+    select(all_of(out_vars), all_of(clust_vars), all_of(exposure), all_of(baselinevars), all_of(emp_vars))
+  
+  cont_vars <- continuous_vars[continuous_vars %in% baselinevars]
+  
+  
+  
+  model_data <- dat1 %>%
+    filter(if_all(c(all_of(baselinevars), all_of(emp_vars), exposure), ~ !is.na(.)))
+  
+  valid_baselinevars <- c(baselinevars, emp_vars)[sapply(model_data[c(baselinevars, emp_vars)], function(x) length(unique(x)) > 1)]
+  
+  # Exposure as factor → numeric labels for xgboost
+  model_data[[exposure]] <- as.factor(model_data[[exposure]])
+  levels_exp <- levels(model_data[[exposure]])
+  n_exp <- length(levels_exp)
+  label_y <- as.integer(model_data[[exposure]]) - 1   # required: 0,1,...,K-1
+  
+  # Build model matrix
+  X <- model.matrix(~ . -1, data = model_data[, valid_baselinevars, drop = FALSE])
+  dtrain <- xgb.DMatrix(data = X, label = label_y)
+  
+  # Choose objective
+  obj <- if (n_exp > 2) "multi:softprob" else "binary:logistic"
+  if (is.null(num_class)) num_class <- if (n_exp > 2) n_exp else 1
+  
+  # Fit xgboost
+  ps_fit <- xgboost(data = dtrain,
+                    objective = obj,
+                    num_class = num_class,
+                    nthread = parallel::detectCores(),
+                    verbose = 0, 
+                    nrounds = 100)
+  
+  # Predict probabilities
+  ps_probs <- predict(ps_fit, newdata = dtrain)
+  
+  if (n_exp > 2) {
+    ps_probs <- matrix(ps_probs, ncol = n_exp, byrow = TRUE)
+    colnames(ps_probs) <- levels_exp
+    obs_exposure <- model_data[[exposure]]
+    
+    # Extract each subject’s probability of observed treatment
+    model_data$ps <- mapply(function(i, trt) ps_probs[i, trt],
+                            i = seq_along(obs_exposure),
+                            trt = obs_exposure)
+    
+    # Stabilized weights
+    marginal_probs <- prop.table(table(obs_exposure))
+    model_data$stab_numerator <- marginal_probs[as.character(obs_exposure)]
+    model_data$wt_stab <- model_data$stab_numerator / model_data$ps
+    
+  } else {
+    # Binary exposure
+    ps_prob <- ps_probs
+    y <- as.numeric(as.character(model_data[[exposure]]))
+    
+    model_data$ps <- ifelse(y == 1, ps_prob, 1 - ps_prob)
+    stab_num <- ifelse(y == 1, mean(y == 1), 1 - mean(y == 1))
+    model_data$wt_stab <- as.numeric(stab_num / model_data$ps)
+  }
+  
+  # Truncate weights
+  p_low <- quantile(model_data$wt_stab, trunc_low)
+  p_high <- quantile(model_data$wt_stab, trunc_high)
+  model_data$wt_trunc <- as.numeric(pmin(pmax(model_data$wt_stab, p_low), p_high))
+  
+  return(list(model = ps_fit, data_weights = model_data))
+}
+
 
 
 
@@ -639,5 +751,123 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
   }
   
   return(res)
+}
+
+
+# hdPS ######
+
+get_dat_all_prev_m <- function(dat1){
+  
+  id_set <- dat1 %>% pull(unique_id)
+  
+  # Helper to read, mutate, and filter SAS data by unique_id
+  read_and_filter <- function(file, code_col, dim_name) {
+    df <- read_sas(file) %>%
+      mutate(unique_id = paste0(studyid_rev, "_", time0)) %>%
+      filter(paste0(studyid_rev, "_", time0) %in% id_set) %>%
+      transmute(
+        studyid_rev, time0,
+        unique_id,
+        code = na_if(as.character(.data[[code_col]]), ""),
+        dim = dim_name
+      ) %>%
+      na.omit()
+    return(df)
+  }
+  
+  dat.proxy <- bind_rows(
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Dad_diagx_prev_m.sas7bdat", "diagx_trunc", "diag"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Dad_proc_prev_m.sas7bdat", "icode_trunc", "proc"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Msp_diag_prev_m.sas7bdat", "diagcd_trunc", "msp_diag"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Msp_fee_prev_m.sas7bdat", "fitm", "msp_fee"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Pnet_drug_rev_prev_m.sas7bdat", "TC5_CD_trunc", "pnet")
+  )
+  
+  # # Generate candidate empirical covariates
+  out1 <- get_candidate_covariates(
+    df = dat.proxy,
+    domainVarname = "dim",
+    eventCodeVarname = "code",
+    patientIdVarname = "unique_id",
+    patientIdVector = id_set,
+    n = 500,
+    min_num_patients = 20
+  )$covars_data
+  
+  
+  # Assess recurrence
+  out2 <- get_recurrence_covariates(
+    df = out1,
+    eventCodeVarname = "code",
+    patientIdVarname = "unique_id",
+    patientIdVector = id_set
+  )$recurrence_data
+  
+  # Merge with input
+  dat.all <- dat1 %>%
+    left_join(out2, by = "unique_id")
+  
+  return(dat.all)
+}
+
+
+
+select_top200_empirical_covariates <- function(dat.all,
+                                               time_var = "time_discont",
+                                               event_var = "sens_discont",
+                                               max_vars = 200,
+                                               nfolds = 10,
+                                               parallel = TRUE,
+                                               vars.empirical) {
+  library(survival)
+  library(glmnet)
+  library(doParallel)
+  library(dplyr)
+  
+  valid_vars.empirical <- vars.empirical[sapply(dat.all[vars.empirical], function(x) length(unique(x)) > 1)]
+  
+  
+  # If ≤ max_vars, return all empirical variables directly
+  if (length(valid_vars.empirical) <= max_vars) {
+    return(valid_vars.empirical)
+  }
+  
+  # Prepare design matrix and response
+  formula.out <- as.formula(paste0("Surv(", time_var, ", ", event_var, ") ~ ", paste(valid_vars.empirical, collapse = " + ")))
+  X <- model.matrix(formula.out, data = dat.all)[, -1]
+  Y <- Surv(dat.all[[time_var]], dat.all[[event_var]])
+  
+  if(parallel){
+    # Set up parallel LASSO fitting
+    n_cores <- parallel::detectCores()
+    cl <- makeCluster(n_cores - 1)
+    registerDoParallel(cl)
+    
+    set.seed(123)
+    fit.lasso <- cv.glmnet(x = X, y = Y, nfolds = nfolds, parallel = parallel, alpha = 1, family = "cox")
+    stopCluster(cl)
+  }
+  
+  set.seed(123)
+  fit.lasso <- cv.glmnet(x = X, y = Y, nfolds = nfolds, parallel = FALSE, alpha = 1, family = "cox")
+  
+  
+  # Extract non-zero coefficients at lambda.min
+  empvars.lasso <- coef(fit.lasso, s = fit.lasso$lambda.min)
+  empvars.lasso <- as.matrix(empvars.lasso)
+  
+  # Convert to data frame and rank by absolute coefficient magnitude
+  empvars.lasso <- data.frame(
+    vars = rownames(empvars.lasso),
+    coef = empvars.lasso[, 1],
+    stringsAsFactors = FALSE
+  ) %>%
+    mutate(coef.abs = abs(coef)) %>%
+    arrange(desc(coef.abs))
+  
+  # Select top N variables
+  top_vars <- empvars.lasso$vars[1:max_vars]
+  
+  return(top_vars)
 }
 
