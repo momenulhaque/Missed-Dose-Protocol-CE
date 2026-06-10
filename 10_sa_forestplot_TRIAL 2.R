@@ -22,7 +22,7 @@ sa_manifest <- tibble::tribble(
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr2_34d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr2_34d_SA10_PostFentEra.rds",
   
-  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/risk_tr2_34d_sa2.rds", "Sensitivities/ps_weight_tr2_34d_sa2.rds",
+  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr2_34d_5cat.rds", "Sensitivities/ps_weight_tr2_34d_5cat.rds",
   
   "4. Outcome definition", "30 days washout\nfor prevalent users", "standard", "Sensitivities/Risk/risk_tr2_34d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr2_34d_SA13_30dWashout.rds",
   "4. Outcome definition", "No truncation at 12 months", "standard", "Sensitivities/Risk/risk_tr2_34d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr2_34d_SA12_NoTruncation.rds",
