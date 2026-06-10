@@ -1,57 +1,70 @@
-# Trial 2 ##############################
-
 library(tidyverse)
 library(forestploter)
 library(grid)
 
-## 1. SETUP & MASTER MANIFEST ---------------------------------------------------
+# 1. SETUP & MASTER MANIFEST ---------------------------------------------------
 RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 
-# Master Manifest (Updated Labels)
 sa_manifest <- tibble::tribble(
   ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
   
-  "0. Primary Analysis", "No prior interruption within the episode", "primary_all", "Risk/risk_tr2_34d_rmst.rds", "PScore/ps_weight_tr2_34d_all.rds",
+  "0. Primary Analysis", "No prior interruption\nwithin episode (i.e., first\ninterruption in any episode)", "primary_all", "Risk/risk_tr2_34d_rmst.rds", "PScore/ps_weight_tr2_34d_all.rds",
   
-  "1. Sample restriction", "No prior interruption", "primary_first", "Risk/risk_tr2_34d_rmst.rds", "PScore/ps_weight_tr2_34d_first.rds",
-  "1. Sample restriction", "No interruption in past 30 days within the episode", "standard", "Sensitivities/Risk/risk_tr2_34d_sa2.rds", "Sensitivities/ps_weight_tr2_34d_sa2.rds",
-    "1. Sample restriction", "Completed induction", "standard", "Sensitivities/Risk/risk_tr2_34d_SA02_Induction.rds", "Sensitivities/ps_wt_tr2_34d_SA02_Induction.rds",
-  "1. Sample restriction", "Missed at <80mg of methadone", "standard", "Sensitivities/Risk/risk_tr2_34d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr2_34d_SA03_Dose_LT80.rds",
-  "1. Sample restriction", "Missed at >=80mg of methadone", "standard", "Sensitivities/Risk/risk_tr2_34d_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr2_34d_SA04_Dose_GE80.rds",
-  "1. Sample restriction", "Days since OAT initiation: \u226430 days", "standard", "Sensitivities/Risk/risk_tr2_34d_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr2_34d_SA05_Ret_LE30.rds",
-  "1. Sample restriction", "Days since OAT initiation: >30 days", "standard", "Sensitivities/Risk/risk_tr2_34d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr2_34d_SA06_Ret_GT30.rds",
-  "1. Sample restriction", "Restricted to high fentanyl area", "standard", "Sensitivities/Risk/risk_tr2_34d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr2_34d_SA09_HighFentArea.rds",
-  "1. Sample restriction", "1-year or longer cumulative OAT experience", "standard", "Sensitivities/Risk/risk_tr2_34d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr2_34d_SA11_CumOAT_GE1yr.rds",
+  "1. Sample restriction", "No prior interruption (i.e.,\nfirst interruption in first\nepisode)", "primary_first", "Risk/risk_tr2_34d_rmst.rds", "PScore/ps_weight_tr2_34d_first.rds",
+  "1. Sample restriction", "No interruption in past\n30 days within the episode", "standard", "Sensitivities/Risk/risk_tr2_34d_sa2.rds", "Sensitivities/ps_weight_tr2_34d_sa2.rds",
+  "1. Sample restriction", "Completed induction", "standard", "Sensitivities/Risk/risk_tr2_34d_SA02_Induction.rds", "Sensitivities/ps_wt_tr2_34d_SA02_Induction.rds",
+  "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr2_34d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr2_34d_SA03_Dose_LT80.rds",
+  "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr2_34d_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr2_34d_SA04_Dose_GE80.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr2_34d_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr2_34d_SA05_Ret_LE30.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr2_34d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr2_34d_SA06_Ret_GT30.rds",
+  "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr2_34d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr2_34d_SA09_HighFentArea.rds",
+  "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr2_34d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr2_34d_SA11_CumOAT_GE1yr.rds",
   
-  "2. Timeline restriction", "Restricted to post-fentanyl era (\u2265 April 1, 2012)", "standard", "Sensitivities/Risk/risk_tr2_34d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr2_34d_SA10_PostFentEra.rds",
+  "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr2_34d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr2_34d_SA10_PostFentEra.rds",
   
-  "3. Exposure classification", "5 category dose adjustment", "standard", "Sensitivities/risk_tr2_34d_sa2.rds", "Sensitivities/ps_weight_tr2_34d_sa2.rds",
+  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/risk_tr2_34d_sa2.rds", "Sensitivities/ps_weight_tr2_34d_sa2.rds",
   
-  "4. Outcome definition", "30 days washout for prevalent users", "standard", "Sensitivities/Risk/risk_tr2_34d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr2_34d_SA13_30dWashout.rds",
+  "4. Outcome definition", "30 days washout\nfor prevalent users", "standard", "Sensitivities/Risk/risk_tr2_34d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr2_34d_SA13_30dWashout.rds",
   "4. Outcome definition", "No truncation at 12 months", "standard", "Sensitivities/Risk/risk_tr2_34d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr2_34d_SA12_NoTruncation.rds",
-  "4. Outcome definition", "Composite outcome: Overdose or death", "standard", "Sensitivities/Risk/risk_tr2_34d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr2_34d_SA16_Composite_OD.rds",
+  "4. Outcome definition", "Composite outcome:\nOverdose or death", "standard", "Sensitivities/Risk/risk_tr2_34d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr2_34d_SA16_Composite_OD.rds",
   
-  "5. Model specification", "High-dimensional propensity score (hdPS)", "hdps", "Risk/risk_hdPS_34d.rds", "PScore/ps_weight_34d_hdPS.rds",
-  "5. Model specification", "hdPS with machine learning algorithm", "hdps", "Risk/risk_hdPS_ML_34d.rds", "PScore/ps_weight_34d_hdPS_ML.rds",
-  "5. Model specification", "Overlap weights based analysis", "ow_all", "Risk/OW/risk_tr2_34d.rds", "PScore/ps_weight_tr2_34d_all.rds"
+  "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_hdPS_34d.rds", "PScore/ps_weight_34d_hdPS.rds",
+  "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_hdPS_ML_34d.rds", "PScore/ps_weight_34d_hdPS_ML.rds",
+  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr2_34d.rds", "PScore/ps_weight_tr2_34d_all.rds"
 )
 
-trt_levels <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
-trt_clean <- c("no reversion" = "No dose change", "1-<50%" = "<50% reduction", 
-               ">=50%/<=40mg" = "\u226550% reduction/\u226440mg", "increase" = "Dose increase")
+trt_clean <- c(
+  "no reversion" = "No dose change", 
+  "1-<50%" = "<50% reduction", 
+  ">=50%/<=40mg" = "\u226550% reduction/\u226440mg", 
+  "increase" = "Dose increase",
+  "increase <=10mg" = "Dose increase (\u226410mg)",
+  "increase >10mg"  = "Dose increase (>10mg)"
+)
 
-trt_colors <- c("No dose change" = "black", 
-                "<50% reduction" = "#2CA02C", 
-                "\u226550% reduction/\u226440mg" = "#FF7F0E", 
-                "Dose increase" = "#D62728")
+trt_colors <- c(
+  "No dose change" = "black", 
+  "<50% reduction" = "#2CA02C", 
+  "\u226550% reduction/\u226440mg" = "#FF7F0E", 
+  "Dose increase" = "#D62728",
+  "Dose increase (\u226410mg)" = "#9467BD", 
+  "Dose increase (>10mg)"  = "#A00000"
+)
 
-## 2. SMART EXTRACTION HELPER ---------------------------------------------------
-extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time) {
+# 2. SMART EXTRACTION HELPER ---------------------------------------------------
+extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time, sa_label) {
   
   full_risk <- paste0(RES_DIR, risk_file)
   full_ps   <- paste0(RES_DIR, ps_file)
   
-  na_block <- tibble(trt = trt_levels, Episode = NA_character_, abs_risk_disp = "", 
+  is_5cat <- grepl("5 category", sa_label)
+  local_levels <- if(is_5cat) {
+    c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <=10mg", "increase >10mg")
+  } else {
+    c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
+  }
+  
+  na_block <- tibble(trt = local_levels, Episode = NA_character_, abs_risk_disp = "", 
                      rd_pct = NA_real_, lci_pct = NA_real_, uci_pct = NA_real_, rd_disp = "")
   
   if (!file.exists(full_risk) || !file.exists(full_ps)) return(na_block)
@@ -72,18 +85,16 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time)
   
   dat_w <- if("data_weights" %in% names(ps_obj)) ps_obj$data_weights else ps_obj
   
-  # 1. Episode Counts (FIX: Explicitly convert trt factor to character to prevent join failures)
   counts <- tryCatch({
     dat_w %>% 
       count(trt, name = "Episode") %>% 
       mutate(trt = as.character(trt), Episode = as.character(Episode))
-  }, error = function(e) tibble(trt = trt_levels, Episode = NA_character_))
+  }, error = function(e) tibble(trt = local_levels, Episode = NA_character_))
   
-  # 2. Risk Differences & Absolute Risks
   contrasts <- tryCatch({
     if (obj_type %in% c("primary_all", "ow_all")) risk_obj$all[[outcome]]$ci$contrasts
     else if (obj_type == "primary_first") risk_obj$first[[outcome]]$ci$contrasts
-    else if (obj_type == "hdps") risk_obj[[outcome]]$contrasts
+    else if (obj_type %in% c("hdps", "rprev")) risk_obj[[outcome]]$contrasts
     else if (obj_type == "standard") risk_obj[[outcome]]$ci$contrasts
     else NULL 
   }, error = function(e) NULL)
@@ -91,53 +102,45 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time)
   risks_df <- tryCatch({
     if (obj_type %in% c("primary_all", "ow_all")) risk_obj$all[[outcome]]$ci$risks
     else if (obj_type == "primary_first") risk_obj$first[[outcome]]$ci$risks
-    else if (obj_type == "hdps") risk_obj[[outcome]]$risks
+    else if (obj_type %in% c("hdps", "rprev")) risk_obj[[outcome]]$risks
     else if (obj_type == "standard") risk_obj[[outcome]]$ci$risks
     else NULL 
   }, error = function(e) NULL)
   
   if (is.null(contrasts) || nrow(contrasts) == 0 || is.null(risks_df)) return(na_block)
   
-  # Absolute Risk Extraction
   abs_data <- risks_df %>%
     filter(horizon == max_time) %>%
     mutate(
-      risk_pct = risk * 100,
-      risk_lower_pct = risk_lower * 100,
-      risk_upper_pct = risk_upper * 100,
-      abs_risk_disp = ifelse(
-        abs(risk_pct) >= 10,
-        sprintf("%.1f (%.1f, %.1f)", risk_pct, risk_lower_pct, risk_upper_pct),
-        sprintf("%.2f (%.2f, %.2f)", risk_pct, risk_lower_pct, risk_upper_pct)
-      )
+      risk_pct = risk * 100, risk_lower_pct = risk_lower * 100, risk_upper_pct = risk_upper * 100,
+      abs_risk_disp = ifelse(abs(risk_pct) >= 10,
+                             sprintf("%.1f (%.1f, %.1f)", risk_pct, risk_lower_pct, risk_upper_pct),
+                             sprintf("%.2f (%.2f, %.2f)", risk_pct, risk_lower_pct, risk_upper_pct))
     ) %>% select(trt, abs_risk_disp)
   
-  # Risk Difference Extraction
   rd_data <- contrasts %>%
     filter(horizon == max_time) %>%
     mutate(
       rd_pct = RD * 100, lci_pct = RD_lower * 100, uci_pct = RD_upper * 100,
-      rd_disp = ifelse(
-        abs(rd_pct) >= 10,
-        sprintf("%.1f (%.1f, %.1f)", rd_pct, lci_pct, uci_pct),
-        sprintf("%.2f (%.2f, %.2f)", rd_pct, lci_pct, uci_pct)
-      )
+      rd_disp = ifelse(abs(rd_pct) >= 10,
+                       sprintf("%.1f (%.1f, %.1f)", rd_pct, lci_pct, uci_pct),
+                       sprintf("%.2f (%.2f, %.2f)", rd_pct, lci_pct, uci_pct))
     ) %>% select(trt, rd_pct, lci_pct, uci_pct, rd_disp)
   
-  tibble(trt = trt_levels) %>% 
+  tibble(trt = local_levels) %>% 
     left_join(counts, by = "trt") %>% 
     left_join(abs_data, by = "trt") %>%
     left_join(rd_data, by = "trt") %>%
     mutate(rd_disp = ifelse(trt == "no reversion", "Ref.", rd_disp))
 }
 
-## 3. BUILD WIDE DATASET --------------------------------------------------------
+# 3. BUILD WIDE DATASET --------------------------------------------------------
 build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   final_rows <- list()
   
   for (i in 1:nrow(manifest)) {
     row_meta <- manifest[i, ]
-    trt_data <- extract_nested_data(row_meta$risk_file, row_meta$ps_file, row_meta$obj_type, outcome, max_time)
+    trt_data <- extract_nested_data(row_meta$risk_file, row_meta$ps_file, row_meta$obj_type, outcome, max_time, row_meta$sa_label)
     
     trt_formatted <- trt_data %>%
       mutate(
@@ -146,7 +149,8 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
         Dose_Adj = recode(trt, !!!trt_clean),
         Episode = replace_na(Episode, ""),
         abs_risk_disp = replace_na(abs_risk_disp, ""),
-        rd_disp = replace_na(rd_disp, "")
+        rd_disp = replace_na(rd_disp, ""),
+        bg_color = ifelse(i %% 2 == 1, "#FFFFFF", "#F5F5F5") 
       )
     final_rows[[length(final_rows) + 1]] <- trt_formatted
   }
@@ -159,16 +163,15 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
     mutate(Category_Col = ifelse(row_number() == 1, Category, "")) %>%
     group_by(Category, SA_Label) %>%
     mutate(SA_Col = {
-      # FIX: Detect "\n" and split the text elegantly across the 4 available rows
       parts <- unlist(strsplit(as.character(SA_Label[1]), "\n"))
       out_col <- rep("", n())
-      max_fill <- min(length(parts), n()) # Fill up to 4 rows
+      max_fill <- min(length(parts), n()) 
       out_col[1:max_fill] <- parts[1:max_fill]
       out_col
     }) %>%
     ungroup() %>%
-    mutate(` ` = paste(rep(" ", 18), collapse = " ")) %>%
-    select(Category_Col, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, ` `)
+    mutate(`Plot_Canvas` = paste(rep(" ", 45), collapse = "")) %>%
+    select(Category_Col, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, `Plot_Canvas`, bg_color)
   
   names(df_final)[names(df_final) == "Category_Col"] <- "Category"
   names(df_final)[names(df_final) == "SA_Col"] <- "Sensitivity Analysis"
@@ -176,106 +179,86 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   names(df_final)[names(df_final) == "Episode"] <- "Episodes at risk\nat reinitiation"
   names(df_final)[names(df_final) == "abs_risk_disp"] <- risk_col_name
   names(df_final)[names(df_final) == "rd_disp"] <- "Risk Difference (%)\n(95% CI)"
+  names(df_final)[names(df_final) == "Plot_Canvas"] <- " " 
   
   return(df_final)
 }
 
-## OVERDOSE #########
-### 4. PLOT GENERATION -----------------------------------------------------------
-plot_data <- build_wide_df(manifest = sa_manifest, outcome = "od", max_time = 30)
+# 4A. PLOT GENERATION: OVERDOSE ------------------------------------------------
+cat("\n--- Generating Overdose Plot ---\n")
+plot_data_od <- build_wide_df(manifest = sa_manifest, outcome = "od", max_time = 30)
 
-num_sas <- nrow(sa_manifest)
-bg_pattern <- rep(c("#FFFFFF", "#F5F5F5"), length.out = num_sas)
-bg_fill_colors <- rep(bg_pattern, each = 4) 
+bg_fill_od <- plot_data_od$bg_color
+ci_col_od <- trt_colors[plot_data_od$`Dose adjustment`]
+ci_col_od[is.na(ci_col_od)] <- "black"
 
-ci_col_mapped <- trt_colors[plot_data$`Dose adjustment`]
-ci_col_mapped[is.na(ci_col_mapped)] <- "black"
+risk_col_od <- "% risk at 1 month\n(95% CI)"
 
-risk_col <- "% risk at 1 month\n(95% CI)"
-
-p <- forest(
-  plot_data[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col, "Risk Difference (%)\n(95% CI)", " ")],
-  est = plot_data$rd_pct,
-  lower = plot_data$lci_pct,
-  upper = plot_data$uci_pct,
-  ci_column = 7,
-  ref_line = 0,
-  xlim = c(-2.5, 2.5),
-  ticks_at = c(-2, -1, 0, 1, 2),
+p_od <- forest(
+  plot_data_od[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_od, "Risk Difference (%)\n(95% CI)", " ")],
+  est = plot_data_od$rd_pct, lower = plot_data_od$lci_pct, upper = plot_data_od$uci_pct,
+  ci_column = 7, 
+  vert_line = c(-3, -2, -1, 1, 2, 3),
+  ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
-  title = "Methadone Interruption 3-4 Days: Adjusted Risk Differences at 1 month\n",
-  theme = forest_theme(
-    base_size = 12,
-    ci_pch = 15,
-    ci_col = "black",  
-    ci_fill = "black", 
-    ci_lwd = 1.8,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "black"),
-    core = list(bg_params = list(fill = bg_fill_colors)) 
-    # Removed the padding override, letting the natural grid handle it seamlessly
-  )
+  title = "Methadone interruption 3-4 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
+  theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
+                       vertline_lty = "dotted",
+                       vertline_col = "grey50", 
+                       vertline_lwd = 1,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       arrow_gp = gpar(fontsize = 11, fontfamily = "", lwd = 0.7),
+                       core = list(bg_params = list(fill = bg_fill_dis),
+                                   padding = unit(c(2, 2), "mm"))) # Forces tight column grouping
 )
 
-for(i in 1:nrow(plot_data)) {
-  row_color <- ci_col_mapped[i]
-  if(!is.na(row_color) && row_color != "black") {
-    p <- edit_plot(p, row = i, col = 7, which = "ci", gp = gpar(col = row_color, fill = row_color))
+for(i in 1:nrow(plot_data_od)) {
+  if(!is.na(ci_col_od[i]) && ci_col_od[i] != "black") {
+    p_od <- edit_plot(p_od, row = i, col = 7, which = "ci", gp = gpar(col = ci_col_od[i], fill = ci_col_od[i]))
   }
 }
 
-
-### 5. SAVE ----------------------------------------------------------------------
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR2_OD.jpg"), width = 4400, height = 5500, res = 300)
-p
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR2_OD.jpg"), width = 4100, height = 5000, res = 300)
+p_od
 dev.off()
 
 
+# 4B. PLOT GENERATION: DISCONTINUATION -----------------------------------------
+cat("\n--- Generating Discontinuation Plot ---\n")
 
-## DISCONTINUATION #########
-### 6. PLOT GENERATION -----------------------------------------------------------
-plot_data <- build_wide_df(manifest = sa_manifest, outcome = "dis", max_time = 365)
+plot_data_dis <- build_wide_df(manifest = sa_manifest, outcome = "dis", max_time = 365) %>%
+  filter(!grepl("Composite outcome", `Sensitivity Analysis`))
 
-num_sas <- nrow(sa_manifest)
-bg_pattern <- rep(c("#FFFFFF", "#F5F5F5"), length.out = num_sas)
-bg_fill_colors <- rep(bg_pattern, each = 4) 
+bg_fill_dis <- plot_data_dis$bg_color
+ci_col_dis <- trt_colors[plot_data_dis$`Dose adjustment`]
+ci_col_dis[is.na(ci_col_dis)] <- "black"
 
-ci_col_mapped <- trt_colors[plot_data$`Dose adjustment`]
-ci_col_mapped[is.na(ci_col_mapped)] <- "black"
+risk_col_dis <- "% risk at 12 months\n(95% CI)"
 
-risk_col <- "% risk at 12 months\n(95% CI)"
-
-p <- forest(
-  plot_data[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col, "Risk Difference (%)\n(95% CI)", " ")],
-  est = plot_data$rd_pct,
-  lower = plot_data$lci_pct,
-  upper = plot_data$uci_pct,
-  ci_column = 7,
-  ref_line = 0,
-  xlim = c(-15, 15),
-  ticks_at = c(-10, -5, 0, 5, 10),
+p_dis <- forest(
+  plot_data_dis[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_dis, "Risk Difference (%)\n(95% CI)", " ")],
+  est = plot_data_dis$rd_pct, lower = plot_data_dis$lci_pct, upper = plot_data_dis$uci_pct,
+  ci_column = 7, 
+  vert_line = c(-15, -10, -5, 5, 10, 15),
+  ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
-  title = "Methadone Interruption 3-4 Days: Adjusted Risk Differences at 12 months\n",
-  theme = forest_theme(
-    base_size = 12,
-    ci_pch = 15,
-    ci_col = "black",  
-    ci_fill = "black", 
-    ci_lwd = 1.8,
-    refline_gp = gpar(lwd = 1, lty = "dashed", col = "black"),
-    core = list(bg_params = list(fill = bg_fill_colors)) 
-    # Removed the padding override, letting the natural grid handle it seamlessly
-  )
+  title = "Methadone interruption 3-4 Days: Adjusted risk differences at 12 Months for OAT discontinuation\n",
+  theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
+                       vertline_lty = "dotted",
+                       vertline_col = "grey50", 
+                       vertline_lwd = 1,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       arrow_gp = gpar(fontsize = 11, fontfamily = "", lwd = 0.7),
+                       core = list(bg_params = list(fill = bg_fill_dis),
+                                   padding = unit(c(2, 2), "mm"))) # Forces tight column grouping
 )
 
-for(i in 1:nrow(plot_data)) {
-  row_color <- ci_col_mapped[i]
-  if(!is.na(row_color) && row_color != "black") {
-    p <- edit_plot(p, row = i, col = 7, which = "ci", gp = gpar(col = row_color, fill = row_color))
+for(i in 1:nrow(plot_data_dis)) {
+  if(!is.na(ci_col_dis[i]) && ci_col_dis[i] != "black") {
+    p_dis <- edit_plot(p_dis, row = i, col = 7, which = "ci", gp = gpar(col = ci_col_dis[i], fill = ci_col_dis[i]))
   }
 }
 
-
-### 7. SAVE ----------------------------------------------------------------------
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR2_DIS.jpg"), width = 4400, height = 5500, res = 300)
-p
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR2_DIS.jpg"), width = 4100, height = 5000, res = 300)
+p_dis
 dev.off()

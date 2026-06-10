@@ -5,13 +5,13 @@ library(grid)
 # 1. SETUP & MASTER MANIFEST ---------------------------------------------------
 RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 
-# Master Manifest (Fixed Paths & Shortened Labels)
+# Master Manifest (Updated for Trial 3: 5-14 Days)
 sa_manifest <- tibble::tribble(
   ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
   
-  "0. Primary Analysis", "No prior interruption\nwithin the episode", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
+  "0. Primary Analysis", "No prior interruption\nwithin episode (i.e., first\ninterruption in any episode)", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
   
-  "1. Sample restriction", "No prior interruption", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
+  "1. Sample restriction", "No prior interruption (i.e.,\nfirst interruption in first\nepisode)", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
   "1. Sample restriction", "No interruption in past\n30 days within the episode", "standard", "Sensitivities/Risk/risk_tr3_514d_sa2.rds", "Sensitivities/ps_weight_tr3_514d_sa2.rds",
   "1. Sample restriction", "Completed induction", "standard", "Sensitivities/Risk/risk_tr3_514d_SA02_Induction.rds", "Sensitivities/ps_wt_tr3_514d_SA02_Induction.rds",
   "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr3_514d_SA03_Dose_LT80.rds",
@@ -34,7 +34,6 @@ sa_manifest <- tibble::tribble(
   "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
 )
 
-# Added 5-category cleaning mapping
 trt_clean <- c(
   "no reversion" = "No dose change", 
   "1-<50%" = "<50% reduction", 
@@ -44,23 +43,21 @@ trt_clean <- c(
   "increase >10mg"  = "Dose increase (>10mg)"
 )
 
-# Assigned slightly different reds for the split increase groups
 trt_colors <- c(
   "No dose change" = "black", 
   "<50% reduction" = "#2CA02C", 
   "\u226550% reduction/\u226440mg" = "#FF7F0E", 
   "Dose increase" = "#D62728",
-  "Dose increase (\u226410mg)" = "#D62728", 
+  "Dose increase (\u226410mg)" = "#9467BD", 
   "Dose increase (>10mg)"  = "#A00000"
 )
 
-# 2. SMART EXTRACTION HELPER (DYNAMIC ROW SUPPORT) -----------------------------
+# 2. SMART EXTRACTION HELPER ---------------------------------------------------
 extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time, sa_label) {
   
   full_risk <- paste0(RES_DIR, risk_file)
   full_ps   <- paste0(RES_DIR, ps_file)
   
-  # Dynamically determine levels based on whether it is the 5-category SA
   is_5cat <- grepl("5 category", sa_label)
   local_levels <- if(is_5cat) {
     c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <=10mg", "increase >10mg")
@@ -138,7 +135,7 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
     mutate(rd_disp = ifelse(trt == "no reversion", "Ref.", rd_disp))
 }
 
-# 3. BUILD WIDE DATASET (FIXED SHADING LOGIC) ----------------------------------
+# 3. BUILD WIDE DATASET --------------------------------------------------------
 build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   final_rows <- list()
   
@@ -154,7 +151,6 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
         Episode = replace_na(Episode, ""),
         abs_risk_disp = replace_na(abs_risk_disp, ""),
         rd_disp = replace_na(rd_disp, ""),
-        # FIX: Hardcode the background stripe based on the loop index
         bg_color = ifelse(i %% 2 == 1, "#FFFFFF", "#F5F5F5") 
       )
     final_rows[[length(final_rows) + 1]] <- trt_formatted
@@ -175,13 +171,8 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
       out_col
     }) %>%
     ungroup() %>%
-    mutate(
-      ` ` = paste(rep(" ", 8), collapse = ""),  
-      `  ` = paste(rep(" ", 8), collapse = ""), 
-      `   ` = paste(rep(" ", 20), collapse = "") 
-    ) %>%
-    # Notice we keep the bg_color column here so we can extract it later
-    select(Category_Col, SA_Col, Dose_Adj, Episode, ` `, abs_risk_disp, `  `, rd_disp, rd_pct, lci_pct, uci_pct, `   `, bg_color)
+    mutate(`Plot_Canvas` = paste(rep(" ", 45), collapse = "")) %>%
+    select(Category_Col, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, `Plot_Canvas`, bg_color)
   
   names(df_final)[names(df_final) == "Category_Col"] <- "Category"
   names(df_final)[names(df_final) == "SA_Col"] <- "Sensitivity Analysis"
@@ -189,72 +180,86 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   names(df_final)[names(df_final) == "Episode"] <- "Episodes at risk\nat reinitiation"
   names(df_final)[names(df_final) == "abs_risk_disp"] <- risk_col_name
   names(df_final)[names(df_final) == "rd_disp"] <- "Risk Difference (%)\n(95% CI)"
+  names(df_final)[names(df_final) == "Plot_Canvas"] <- " " 
   
   return(df_final)
 }
 
-# 4A. PLOT GENERATION: OVERDOSE
-
-cat("\n--- Generating Overdose Plot ---\n")
+# 4A. PLOT GENERATION: OVERDOSE ------------------------------------------------
+cat("\n--- Generating Overdose Plot (Trial 3) ---\n")
 plot_data_od <- build_wide_df(manifest = sa_manifest, outcome = "od", max_time = 30)
 
-# FIX: Extract the perfectly sequential background colors directly from the data
 bg_fill_od <- plot_data_od$bg_color
-
 ci_col_od <- trt_colors[plot_data_od$`Dose adjustment`]
 ci_col_od[is.na(ci_col_od)] <- "black"
 
+risk_col_od <- "% risk at 1 month\n(95% CI)"
+
 p_od <- forest(
-  plot_data_od[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", " ", "% risk at 1 month\n(95% CI)", "  ", "Risk Difference (%)\n(95% CI)", "   ")],
+  plot_data_od[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_od, "Risk Difference (%)\n(95% CI)", " ")],
   est = plot_data_od$rd_pct, lower = plot_data_od$lci_pct, upper = plot_data_od$uci_pct,
-  ci_column = 9, ref_line = 0, xlim = c(-2.5, 2.5), ticks_at = c(-2, -1, 0, 1, 2),
+  ci_column = 7, 
+  vert_line = c(-3, -2, -1, 1, 2, 3),
+  ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
-  title = "Methadone Interruption 5-14 Days: Adjusted Overdose Risk Differences at 30 Days\n",
+  title = "Methadone interruption 5-14 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
-                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "black"),
-                       core = list(bg_params = list(fill = bg_fill_od)))
+                       vertline_lty = "dotted",
+                       vertline_col = "grey50", 
+                       vertline_lwd = 1,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       arrow_gp = gpar(fontsize = 11, fontfamily = "", lwd = 0.7),
+                       core = list(bg_params = list(fill = bg_fill_od), # FIX: corrected to bg_fill_od
+                                   padding = unit(c(2, 2), "mm")))
 )
 
 for(i in 1:nrow(plot_data_od)) {
   if(!is.na(ci_col_od[i]) && ci_col_od[i] != "black") {
-    p_od <- edit_plot(p_od, row = i, col = 9, which = "ci", gp = gpar(col = ci_col_od[i], fill = ci_col_od[i]))
+    p_od <- edit_plot(p_od, row = i, col = 7, which = "ci", gp = gpar(col = ci_col_od[i], fill = ci_col_od[i]))
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR3_OD.jpg"), width = 4500, height = 5500, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR3_OD.jpg"), width = 4100, height = 5000, res = 300)
 p_od
 dev.off()
 
 
-# 4B. PLOT GENERATION: DISCONTINUATION
-cat("\n--- Generating Discontinuation Plot ---\n")
+# 4B. PLOT GENERATION: DISCONTINUATION -----------------------------------------
+cat("\n--- Generating Discontinuation Plot (Trial 3) ---\n")
 
 plot_data_dis <- build_wide_df(manifest = sa_manifest, outcome = "dis", max_time = 365) %>%
   filter(!grepl("Composite outcome", `Sensitivity Analysis`))
 
-# FIX: Extract the background colors directly from the filtered data
 bg_fill_dis <- plot_data_dis$bg_color
-
 ci_col_dis <- trt_colors[plot_data_dis$`Dose adjustment`]
 ci_col_dis[is.na(ci_col_dis)] <- "black"
 
+risk_col_dis <- "% risk at 12 months\n(95% CI)"
+
 p_dis <- forest(
-  plot_data_dis[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", " ", "% risk at 12 months\n(95% CI)", "  ", "Risk Difference (%)\n(95% CI)", "   ")],
+  plot_data_dis[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_dis, "Risk Difference (%)\n(95% CI)", " ")],
   est = plot_data_dis$rd_pct, lower = plot_data_dis$lci_pct, upper = plot_data_dis$uci_pct,
-  ci_column = 9, ref_line = 0, xlim = c(-15, 15), ticks_at = c(-10, -5, 0, 5, 10),
+  ci_column = 7, 
+  vert_line = c(-15, -10, -5, 5, 10, 15),
+  ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
-  title = "Methadone Interruption 5-14 Days: Adjusted Discontinuation Risk Differences at 12 Months\n",
+  title = "Methadone interruption 5-14 Days: Adjusted risk differences at 12 Months for OAT discontinuation\n",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
-                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "black"),
-                       core = list(bg_params = list(fill = bg_fill_dis)))
+                       vertline_lty = "dotted",
+                       vertline_col = "grey50", 
+                       vertline_lwd = 1,
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       arrow_gp = gpar(fontsize = 11, fontfamily = "", lwd = 0.7),
+                       core = list(bg_params = list(fill = bg_fill_dis),
+                                   padding = unit(c(2, 2), "mm")))
 )
 
 for(i in 1:nrow(plot_data_dis)) {
   if(!is.na(ci_col_dis[i]) && ci_col_dis[i] != "black") {
-    p_dis <- edit_plot(p_dis, row = i, col = 9, which = "ci", gp = gpar(col = ci_col_dis[i], fill = ci_col_dis[i]))
+    p_dis <- edit_plot(p_dis, row = i, col = 7, which = "ci", gp = gpar(col = ci_col_dis[i], fill = ci_col_dis[i]))
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR3_DIS.jpg"), width = 4500, height = 5300, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR3_DIS.jpg"), width = 4100, height = 5000, res = 300)
 p_dis
 dev.off()
