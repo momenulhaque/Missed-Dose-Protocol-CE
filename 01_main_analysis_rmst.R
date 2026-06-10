@@ -498,7 +498,6 @@ cat("  ✓ Trial 2, First-interruption-in-any-episode SMD figure saved.\n")
 
 # 7. RMST & CUMULATIVE INCIDENCE ####
 # Risk curves and confidence intervals for overdose and discontinuation
-# Two trials × Two cohorts
 predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
                                 cluster_var, samples = 1000, conf_int = TRUE,
                                 ref_group = "no reversion", wt_type="wt_trunc",
