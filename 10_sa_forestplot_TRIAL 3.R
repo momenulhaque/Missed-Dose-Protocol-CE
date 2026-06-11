@@ -5,15 +5,15 @@ library(grid)
 # 1. SETUP & MASTER MANIFEST ---------------------------------------------------
 RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 
-# Master Manifest (Updated for Trial 3: 5-14 Days)
+# Master Manifest (Trial 3)
 sa_manifest <- tibble::tribble(
   ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
   
-  "0. Primary Analysis", "No prior interruption\nwithin episode (i.e., first\ninterruption in any episode)", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
+  "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
   
-  "1. Sample restriction", "No prior interruption (i.e.,\nfirst interruption in first\nepisode)", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
-  "1. Sample restriction", "No interruption in past\n30 days within the episode", "standard", "Sensitivities/Risk/risk_tr3_514d_sa2.rds", "Sensitivities/ps_weight_tr3_514d_sa2.rds",
-  "1. Sample restriction", "Completed induction", "standard", "Sensitivities/Risk/risk_tr3_514d_SA02_Induction.rds", "Sensitivities/ps_wt_tr3_514d_SA02_Induction.rds",
+  "1. Sample restriction", "First interruption in\nfirst episode", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
+  "1. Sample restriction", "Any interruption in\nany episode", "standard", "Sensitivities/Risk/risk_tr3_514d_sa2.rds", "Sensitivities/ps_weight_tr3_514d_sa2.rds",
+  "1. Sample restriction", "People who completed\ninduction", "standard", "Sensitivities/Risk/risk_tr3_514d_SA02_Induction.rds", "Sensitivities/ps_wt_tr3_514d_SA02_Induction.rds",
   "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr3_514d_SA03_Dose_LT80.rds",
   "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr3_514d_SA04_Dose_GE80.rds",
   "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr3_514d_SA05_Ret_LE30.rds",
@@ -26,7 +26,7 @@ sa_manifest <- tibble::tribble(
   "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
   
   "4. Outcome definition", "30 days washout\nfor prevalent users", "standard", "Sensitivities/Risk/risk_tr3_514d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr3_514d_SA13_30dWashout.rds",
-  "4. Outcome definition", "No truncation at 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+  "4. Outcome definition", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
   "4. Outcome definition", "Composite outcome:\nOverdose or death", "standard", "Sensitivities/Risk/risk_tr3_514d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr3_514d_SA16_Composite_OD.rds",
   
   "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
@@ -34,13 +34,14 @@ sa_manifest <- tibble::tribble(
   "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
 )
 
+
 trt_clean <- c(
   "no reversion" = "No dose change", 
   "1-<50%" = "<50% reduction", 
   ">=50%/<=40mg" = "\u226550% reduction/\u226440mg", 
   "increase" = "Dose increase",
-  "increase <=10mg" = "Dose increase (\u226410mg)",
-  "increase >10mg"  = "Dose increase (>10mg)"
+  "increase <50%" = "<50% increase",
+  "increase >=50%"  = "\u226550% increase"
 )
 
 trt_colors <- c(
@@ -48,8 +49,8 @@ trt_colors <- c(
   "<50% reduction" = "#2CA02C", 
   "\u226550% reduction/\u226440mg" = "#FF7F0E", 
   "Dose increase" = "#D62728",
-  "Dose increase (\u226410mg)" = "#9467BD", 
-  "Dose increase (>10mg)"  = "#A00000"
+  "<50% increase" = "#9467BD", 
+  "\u226550% increase"  = "#A00000"
 )
 
 # 2. SMART EXTRACTION HELPER ---------------------------------------------------
@@ -60,7 +61,7 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
   
   is_5cat <- grepl("5 category", sa_label)
   local_levels <- if(is_5cat) {
-    c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <=10mg", "increase >10mg")
+    c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <50%", "increase >=50%")
   } else {
     c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
   }
@@ -135,7 +136,7 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
     mutate(rd_disp = ifelse(trt == "no reversion", "Ref.", rd_disp))
 }
 
-# 3. BUILD WIDE DATASET --------------------------------------------------------
+# 3. BUILD WIDE DATASET (WITH HEADERS & INDENTATION) ---------------------------
 build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   final_rows <- list()
   
@@ -165,25 +166,57 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
     group_by(Category, SA_Label) %>%
     mutate(SA_Col = {
       parts <- unlist(strsplit(as.character(SA_Label[1]), "\n"))
+      
+      # ---> FIX: Indent the sub-rows by 4 spaces so the Header sits further left
+      parts <- paste0("    ", parts) 
+      
       out_col <- rep("", n())
       max_fill <- min(length(parts), n()) 
       out_col[1:max_fill] <- parts[1:max_fill]
       out_col
     }) %>%
     ungroup() %>%
-    mutate(`Plot_Canvas` = paste(rep(" ", 45), collapse = "")) %>%
-    select(Category_Col, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, `Plot_Canvas`, bg_color)
+    mutate(`Plot_Canvas` = paste(rep(" ", 45), collapse = ""))
   
-  names(df_final)[names(df_final) == "Category_Col"] <- "Category"
-  names(df_final)[names(df_final) == "SA_Col"] <- "Sensitivity Analysis"
-  names(df_final)[names(df_final) == "Dose_Adj"] <- "Dose adjustment"
-  names(df_final)[names(df_final) == "Episode"] <- "Episodes at risk\nat reinitiation"
-  names(df_final)[names(df_final) == "abs_risk_disp"] <- risk_col_name
-  names(df_final)[names(df_final) == "rd_disp"] <- "Risk Difference (%)\n(95% CI)"
-  names(df_final)[names(df_final) == "Plot_Canvas"] <- " " 
+  categories <- unique(df_final$Category)
+  df_with_headers <- bind_rows(lapply(categories, function(cat) {
+    sub_df <- df_final %>% filter(Category == cat)
+    
+    header_row <- sub_df[1, ]
+    header_row[] <- NA
+    header_row$Category <- cat
+    
+    # Header receives the category text perfectly flush left (no spaces)
+    header_row$SA_Col <- cat           
+    
+    header_row$Dose_Adj <- ""
+    header_row$Episode <- ""
+    header_row$abs_risk_disp <- ""
+    header_row$rd_disp <- ""
+    header_row$`Plot_Canvas` <- ""
+    
+    # ---> FIX: Shade the header row in a darker, contrasting grey
+    header_row$bg_color <- "#E0E0E0"   
+    
+    header_row$is_header <- TRUE
+    sub_df$is_header <- FALSE
+    
+    bind_rows(header_row, sub_df)
+  }))
   
-  return(df_final)
+  df_with_headers <- df_with_headers %>%
+    select(is_header, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, `Plot_Canvas`, bg_color)
+  
+  names(df_with_headers)[names(df_with_headers) == "SA_Col"] <- "Sensitivity Analysis"
+  names(df_with_headers)[names(df_with_headers) == "Dose_Adj"] <- "Dose adjustment"
+  names(df_with_headers)[names(df_with_headers) == "Episode"] <- "Episodes at risk\nat reinitiation"
+  names(df_with_headers)[names(df_with_headers) == "abs_risk_disp"] <- risk_col_name
+  names(df_with_headers)[names(df_with_headers) == "rd_disp"] <- "Risk Difference (%)\n(95% CI)"
+  names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- " " 
+  
+  return(df_with_headers)
 }
+
 
 # 4A. PLOT GENERATION: OVERDOSE ------------------------------------------------
 cat("\n--- Generating Overdose Plot (Trial 3) ---\n")
@@ -194,11 +227,12 @@ ci_col_od <- trt_colors[plot_data_od$`Dose adjustment`]
 ci_col_od[is.na(ci_col_od)] <- "black"
 
 risk_col_od <- "% risk at 1 month\n(95% CI)"
+header_idx_od <- which(plot_data_od$is_header)
 
 p_od <- forest(
-  plot_data_od[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_od, "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_od[, c("Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_od, "Risk Difference (%)\n(95% CI)", " ")],
   est = plot_data_od$rd_pct, lower = plot_data_od$lci_pct, upper = plot_data_od$uci_pct,
-  ci_column = 7, 
+  ci_column = 6, 
   vert_line = c(-3, -2, -1, 1, 2, 3),
   ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
@@ -209,17 +243,22 @@ p_od <- forest(
                        vertline_lwd = 1,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        arrow_gp = gpar(fontsize = 11, fontfamily = "", lwd = 0.7),
-                       core = list(bg_params = list(fill = bg_fill_od), # FIX: corrected to bg_fill_od
+                       core = list(bg_params = list(fill = bg_fill_od), 
                                    padding = unit(c(2, 2), "mm")))
 )
 
+p_od <- edit_plot(p_od, row = header_idx_od, gp = gpar(fontface = "bold"))
+# FIX: Using proper 'npc' units for center alignment
+p_od <- edit_plot(p_od, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+
 for(i in 1:nrow(plot_data_od)) {
-  if(!is.na(ci_col_od[i]) && ci_col_od[i] != "black") {
-    p_od <- edit_plot(p_od, row = i, col = 7, which = "ci", gp = gpar(col = ci_col_od[i], fill = ci_col_od[i]))
+  if(!plot_data_od$is_header[i] && !is.na(ci_col_od[i]) && ci_col_od[i] != "black") {
+    p_od <- edit_plot(p_od, row = i, col = 6, which = "ci", gp = gpar(col = ci_col_od[i], fill = ci_col_od[i]))
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR3_OD.jpg"), width = 4100, height = 5000, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_OD.jpg"), width = 3550, height = 5250, res = 300)
 p_od
 dev.off()
 
@@ -235,11 +274,12 @@ ci_col_dis <- trt_colors[plot_data_dis$`Dose adjustment`]
 ci_col_dis[is.na(ci_col_dis)] <- "black"
 
 risk_col_dis <- "% risk at 12 months\n(95% CI)"
+header_idx_dis <- which(plot_data_dis$is_header)
 
 p_dis <- forest(
-  plot_data_dis[, c("Category", "Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_dis, "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_dis[, c("Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_dis, "Risk Difference (%)\n(95% CI)", " ")],
   est = plot_data_dis$rd_pct, lower = plot_data_dis$lci_pct, upper = plot_data_dis$uci_pct,
-  ci_column = 7, 
+  ci_column = 6, 
   vert_line = c(-15, -10, -5, 5, 10, 15),
   ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
@@ -254,12 +294,18 @@ p_dis <- forest(
                                    padding = unit(c(2, 2), "mm")))
 )
 
+p_dis <- edit_plot(p_dis, row = header_idx_dis, gp = gpar(fontface = "bold"))
+# FIX: Using proper 'npc' units for center alignment
+p_dis <- edit_plot(p_dis, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+
 for(i in 1:nrow(plot_data_dis)) {
-  if(!is.na(ci_col_dis[i]) && ci_col_dis[i] != "black") {
-    p_dis <- edit_plot(p_dis, row = i, col = 7, which = "ci", gp = gpar(col = ci_col_dis[i], fill = ci_col_dis[i]))
+  if(!plot_data_dis$is_header[i] && !is.na(ci_col_dis[i]) && ci_col_dis[i] != "black") {
+    p_dis <- edit_plot(p_dis, row = i, col = 6, which = "ci", gp = gpar(col = ci_col_dis[i], fill = ci_col_dis[i]))
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_Wide_TR3_DIS.jpg"), width = 4100, height = 5000, res = 300)
+
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_DIS.jpg"), width = 3550, height = 5250, res = 300)
 p_dis
 dev.off()

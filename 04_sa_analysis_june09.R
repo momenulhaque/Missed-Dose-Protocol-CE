@@ -884,14 +884,20 @@ saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d_sa2.rds"))
 
 
 # 5 category exposure ###########
+library(tidyverse)
+library(haven)
+library(survival)
+library(sandwich)
+
+## 1. SETUP & DATA PREPARATION --------------------------------------------------
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
 RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
 dir.create(RES_DIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(paste0(RES_DIR, "Risk/"), showWarnings = FALSE, recursive = TRUE)
 
-TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <=10mg", "increase >10mg")
+TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <50%", "increase >=50%")
 clust_vars <- c("studyid_rev", "episode", "time0")
 
-# Default variables
 default_out_vars <- c("sens_discont", "time_discont", 
                       "sens_od_acute", "time_od_acute", 
                       "sens_all_acute", "time_all_acute")
@@ -904,20 +910,16 @@ baselinevars <- c("sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
 
 continuous_vars <- c("ddose_prev", "year", "ret_length")
 
-## 1. DATA PREPARATION ----------------------------------------------------------
+# Custom cleaner mapping the relative dose changes
 clean_trt_all <- function(dat) {
   dat |>
     mutate(
-      trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456),
-      increase_amount = ifelse(trt_s456 == "increase", abs(ddose_red), NA),
-      
-      # FIX: Keep the original groups intact, and dynamically split the increase group
       trt_s456 = case_when(
-        trt_s456 == "no reversion" ~ "no reversion",
-        trt_s456 == "1-<50%" ~ "1-<50%",
-        trt_s456 == ">=50%/<=40mg" ~ ">=50%/<=40mg",
-        trt_s456 == "increase" & increase_amount <= 10 ~ "increase <=10mg",
-        trt_s456 == "increase" & increase_amount > 10 ~ "increase >10mg",
+        ddose_rev == 0 ~ "no reversion",
+        ddose_rev > 0 & ddose_rev < 50  ~ "1-<50%",
+        (!is.na(ddose) & ddose < ddose_prev & ddose <= 40) | ddose_rev >= 50 ~ ">=50%/<=40mg",
+        ddose_rev < 0 & ddose_rev > -50  ~ "increase <50%",
+        ddose_rev <= -50  ~ "increase >=50%", # <= captures all increases of 50% or more (negative sign)
         TRUE ~ NA_character_
       ),
       trt_s456 = factor(trt_s456, levels = TRT_LEVELS),
@@ -931,223 +933,49 @@ clean_trt_all <- function(dat) {
       prior_gap_num = row_number()
     ) %>%
     ungroup()
-  
 }
 
+cat("\n--- Loading & Cleaning Data ---\n")
 raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
 
-dat_tr2_all <- raw_all |>
-  filter(trial_gap %in% 3:4) |>
-  clean_trt_all() 
+dat_tr2_all <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_all() 
+dat_tr3_all <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_all()
 
-dat_tr3_all <- raw_all |>
-  filter(trial_cat == "5-14") |>
-  clean_trt_all()
-
-# Quick check to ensure all 5 categories populated correctly
+cat("\nTR2 Exposure Distribution:\n")
+print(dat_tr2_all %>% count(trt))
+cat("\nTR3 Exposure Distribution:\n")
 print(dat_tr3_all %>% count(trt))
 
 rm(raw_all); gc()
 
 
-## 2. PS MODELS ########
+## 2. PROPENSITY SCORE MODELS ---------------------------------------------------
+cat("\n--- Running PS Models ---\n")
 
 ps_tr2 <- ps_model_wt(
-  dat             = dat_tr2_all,  # FIX: Corrected from dat_tr2_sa2
+  dat             = dat_tr2_all, 
   exposure        = "trt",
   baselinevars    = c(baselinevars, "prior_episode"),
   continuous_vars = c(continuous_vars, "prior_episode"),
-  out_vars        = out_vars,
+  out_vars        = default_out_vars,
   clust_vars      = clust_vars
 )
-
 saveRDS(ps_tr2, paste0(RES_DIR, "ps_weight_tr2_34d_5cat.rds"))
 
 ps_tr3 <- ps_model_wt(
-  dat             = dat_tr3_all,  # FIX: Corrected from dat_tr3_sa2
+  dat             = dat_tr3_all, 
   exposure        = "trt",
   baselinevars    = c(baselinevars, "prior_episode"),
   continuous_vars = c(continuous_vars, "prior_episode"),
-  out_vars        = out_vars,
+  out_vars        = default_out_vars,
   clust_vars      = clust_vars
 )
-
 saveRDS(ps_tr3, paste0(RES_DIR, "ps_weight_tr3_514d_5cat.rds"))
 
 
+## 3. OUTCOME MODELS ------------------------------------------------------------
+cat("\n--- Running Outcome Models ---\n")
 
-
-
-
-
-
-
-##3.  SMDs: 5 Category ########
-
-library(tidyverse)
-library(cobalt)
-library(patchwork)
-library(cowplot)
-
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
-dir.create(paste0(RES_DIR, "Figures"), showWarnings = FALSE)
-
-# Global settings for love plots
-x_low    <- -0.6
-x_high   <- 0.6
-x_breaks <- c(-0.4, -0.2, 0, 0.2, 0.4)
-
-baselinevars <- c("sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
-                  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
-                  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
-                  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
-                  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss")
-
-# Human-readable variable labels 
-VAR_LABELS <- c(
-  sexM          = "Sex: Male",
-  age_lt30      = "Age category: 18-29",
-  age_30_39     = "Age category: 30-39",
-  age_40_49     = "Age category: 40-49",
-  age_ge50      = "Age category: 50+",
-  rural         = "Region: Rural",
-  year          = "Year of reinitiation date",
-  po_preOUD     = "Opioid dispensations other than OAT prior to first OUD",
-  phy_att_gr2   = "Attachment to the prescriber who reinitiated OAT",
-  social_assist = "Receipt of income assistance in the past year",
-  ret_length    = "Duration of OAT episode before time zero",
-  home_grp_b    = "Unstable housing in past 5 years",
-  incar_grp_bl  = "Incarcerated in the past year",
-  drug_acute    = "Drug-related acute care visits in the past month",
-  cci_gt0       = "Charlson Comorbidity Index (>0)",
-  copd_asthma   = "Asthma or COPD in the past year",
-  sed_psy_med   = "Dispensations of psychiatric/sedative med in past month",
-  po            = "Dispensations opioid other than OAT in the past month",
-  sud           = "Other substance use disorder",
-  aud           = "Alcohol use disorder",
-  smd           = "Serious mental disorder",
-  hcv           = "Hepatitis C",
-  tob           = "Tobacco use disorder (past year)",
-  udt           = "Urine drug test in the past month",
-  ddose_prev    = "Last daily dose",
-  clin_size_b   = "Large practice size (>300 clients)",
-  virtual_care  = "Virtual care in past month",
-  pss           = "Prescriber safer supply",
-  prior_episode = "Number of prior episodes"
-)
-
-cat("\n=== Creating 4-Panel SMD plots (5 Categories) ===\n")
-
-cat("\nTrial 2 (3-4 days)...\n")
-
-ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr2_34d_5cat.rds")) 
-
-dat <- ps_fit$data_weights |>
-  mutate(
-    # Format the exact text that will appear in the panel headers
-    trt = recode(trt,
-                 "no reversion"    = "No dose change",
-                 "1-<50%"          = "1-<50% reduction",
-                 ">=50%/<=40mg"    = "≥50% reduction/≤40mg",
-                 "increase <=10mg" = "Dose increase (≤10mg)",
-                 "increase >10mg"  = "Dose increase (>10mg)"),
-    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
-    prior_episode = as.numeric(prior_episode)
-  )
-
-fmla <- as.formula(paste("trt ~", paste(c(baselinevars, "prior_episode"), collapse = " + ")))
-vars_to_plot <- VAR_LABELS[names(VAR_LABELS) %in% c(baselinevars, "prior_episode")]
-
-# Build Panels
-build_panel <- function(data, group_name, title_text, show_y = FALSE) {
-  d_sub <- subset(data, trt %in% c("No dose change", group_name))
-  d_sub$trt <- droplevels(d_sub$trt)
-  prep <- bal.tab(fmla, data = d_sub, weights = d_sub$wt_trunc, estimand = "ATE", 
-                  m.threshold = 0.1, s.d.denom = "pooled", un = TRUE, stats = "mean.diffs")
-  
-  bg_data <- data.frame(var_index = seq_len(nrow(prep$Balance)), 
-                        fill_color = rep(c("gray65", "white"), length.out = nrow(prep$Balance)))
-  
-  p <- love.plot(prep, stat = "mean.diffs", stars = "none", thresholds = c(m = 0.1), abs = FALSE,
-                 var.names = vars_to_plot, sample.names = c("Before", "After"), 
-                 position = "none", line = FALSE, colors = c("black", "red"), shapes = c(16, 16)) +
-    geom_rect(data = bg_data, aes(ymin = var_index - 0.5, ymax = var_index + 0.5, xmin = -Inf, xmax = Inf, fill = fill_color), inherit.aes = FALSE, alpha = 0.2) +
-    geom_vline(xintercept = c(-0.1, 0.1), linetype = "dashed", colour = "grey50", linewidth = 0.3) +
-    scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.4, -0.2, 0, 0.2, 0.4), expand = c(0, 0)) +
-    scale_fill_identity() +
-    labs(x = "", y = "", title = title_text) +
-    theme_minimal(base_size = 12) +
-    theme(title = element_text(color = "black", size = 12),
-          panel.grid = element_blank(), axis.line = element_line(color = "black"),
-          axis.ticks.length = unit(0.2, "cm"), axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
-          axis.text.x = element_text(color = "black", size = 11),
-          axis.text.y = if(show_y) element_text(color = "black", size = 10) else element_blank(),
-          legend.position = "none")
-  return(p)
-}
-
-p_1 <- build_panel(dat, "1-<50% reduction", "1-<50% reduction\nvs\nno change", TRUE)
-p_2 <- build_panel(dat, "≥50% reduction/≤40mg", "≥50% reduction/≤40mg\nvs\nno change", FALSE)
-p_3 <- build_panel(dat, "Dose increase (≤10mg)", "Dose increase (≤10mg)\nvs\nno change", FALSE)
-p_4 <- build_panel(dat, "Dose increase (>10mg)", "Dose increase (>10mg)\nvs\nno change", FALSE)
-
-# Assemble 4 panels
-row_tr2 <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 + plot_spacer() + p_4 +
-  plot_layout(widths = c(1, 0.05, 1, 0.05, 1, 0.05, 1))
-
-row_tr2 <- plot_spacer() / row_tr2 + plot_layout(heights = c(0.05, 1))
-
-plot_tr2_final <- ggdraw(row_tr2) +
-  draw_label("A. Methadone interruption of 3-4 days (5-Category Exposure)", x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
-  draw_label("Note: SMD ≥ 0.1 included in outcome models.", x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
-
-# Width increased to 5000 to fit the 4th panel cleanly
-jpeg(paste0(RES_DIR, "Figures/smd_love_plots_tr2_5cat.jpg"), width = 5000, height = 2400, res = 300)
-print(plot_tr2_final)
-dev.off()
-
-
-cat("\nTrial 3 (5-14 days)...\n")
-
-ps_fit_3 <- readRDS(paste0(RES_DIR, "ps_weight_tr3_514d_5cat.rds")) 
-
-dat_3 <- ps_fit_3$data_weights |>
-  mutate(
-    trt = recode(trt,
-                 "no reversion"    = "No dose change",
-                 "1-<50%"          = "1-<50% reduction",
-                 ">=50%/<=40mg"    = "≥50% reduction/≤40mg",
-                 "increase <=10mg" = "Dose increase (≤10mg)",
-                 "increase >10mg"  = "Dose increase (>10mg)"),
-    incar_grp_bl = ifelse(incar_grp_bl == "1_pastyear", 1, 0),
-    prior_episode = as.numeric(prior_episode)
-  )
-
-p3_1 <- build_panel(dat_3, "1-<50% reduction", "1-<50% reduction\nvs\nno change", TRUE)
-p3_2 <- build_panel(dat_3, "≥50% reduction/≤40mg", "≥50% reduction/≤40mg\nvs\nno change", FALSE)
-p3_3 <- build_panel(dat_3, "Dose increase (≤10mg)", "Dose increase (≤10mg)\nvs\nno change", FALSE)
-p3_4 <- build_panel(dat_3, "Dose increase (>10mg)", "Dose increase (>10mg)\nvs\nno change", FALSE)
-
-row_tr3 <- p3_1 + plot_spacer() + p3_2 + plot_spacer() + p3_3 + plot_spacer() + p3_4 +
-  plot_layout(widths = c(1, 0.05, 1, 0.05, 1, 0.05, 1))
-
-row_tr3 <- plot_spacer() / row_tr3 + plot_layout(heights = c(0.05, 1))
-
-plot_tr3_final <- ggdraw(row_tr3) +
-  draw_label("B. Methadone interruption of 5-14 days (5-Category Exposure)", x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
-  draw_label("Note: SMD ≥ 0.1 included in outcome models.", x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
-
-jpeg(paste0(RES_DIR, "Figures/smd_love_plots_tr3_5cat.jpg"), width = 5000, height = 2400, res = 300)
-print(plot_tr3_final)
-dev.off()
-
-cat("\n=== Done! 5-category Love Plots Generated ===\n")
-
-
-
-
-
-## 4. OUTCOME MODELS ########
 predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
                                 cluster_var, samples = 1000, conf_int = TRUE,
                                 ref_group = "no reversion", wt_type="wt_trunc",
@@ -1325,153 +1153,37 @@ risk <- list(
   tr3 = list(od = list(), dis = list())
 )
 
-### MET interruption of 3-4 days #############
-
+# === TRIAL 2 (3-4 Days) ===
+cat("Processing Trial 2 Outcomes...\n")
 ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr2_34d_5cat.rds"))
 
-# Overdose
-long_dat_od <- expand_person_period(ps_fit$data_weights,
-                                    time_var  = "time_od_acute",
-                                    event_var = "sens_od_acute",
-                                    interval_length = 14)
+# TR2 Overdose
+long_dat_od <- expand_person_period(ps_fit$data_weights, time_var = "time_od_acute", event_var = "sens_od_acute", interval_length = 14)
+risk$tr2$od$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_od, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+risk$tr2$od$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_od, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
 
-
-risk$tr2$od$curve <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_od, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "prior_episode"),
-  horizons = HORIZONS_CURVE, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = FALSE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
-
-
-risk$tr2$od$ci <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_od, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "prior_episode"),
-  horizons = HORIZONS_CI, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = TRUE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
-
-# Discontinuation
-long_dat_dis <- expand_person_period(ps_fit$data_weights,
-                                     time_var  = "time_discont",
-                                     event_var = "sens_discont",
-                                     interval_length = 14)
-
-risk$tr2$dis$curve <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_dis, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "prior_episode"),
-  horizons = HORIZONS_CURVE, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = FALSE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
-
-
-risk$tr2$dis$ci <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_dis, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "prior_episode"),
-  horizons = HORIZONS_CI, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = TRUE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
+# TR2 Discontinuation
+long_dat_dis <- expand_person_period(ps_fit$data_weights, time_var = "time_discont", event_var = "sens_discont", interval_length = 14)
+risk$tr2$dis$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_dis, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+risk$tr2$dis$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_dis, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
 
 saveRDS(risk$tr2, paste0(RES_DIR, "Risk/", "risk_tr2_34d_5cat.rds"))
 
 
+# === TRIAL 3 (5-14 Days) ===
+cat("Processing Trial 3 Outcomes...\n")
+ps_fit_3 <- readRDS(paste0(RES_DIR, "ps_weight_tr3_514d_5cat.rds"))
 
+# TR3 Overdose
+long_dat_od_3 <- expand_person_period(ps_fit_3$data_weights, time_var = "time_od_acute", event_var = "sens_od_acute", interval_length = 14)
+risk$tr3$od$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_od_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+risk$tr3$od$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_od_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
 
-
-
-### MET interruption of 5-14 days #############
-
-ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr3_514d_5cat.rds"))
-
-# Overdose
-long_dat_od <- expand_person_period(ps_fit$data_weights,
-                                    time_var  = "time_od_acute",
-                                    event_var = "sens_od_acute",
-                                    interval_length = 14)
-
-
-risk$tr3$od$curve <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_od, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "year"),
-  horizons = HORIZONS_CURVE, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = FALSE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
-
-
-risk$tr3$od$ci <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_od, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "year"),
-  horizons = HORIZONS_CI, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = TRUE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
-
-# Discontinuation
-long_dat_dis <- expand_person_period(ps_fit$data_weights,
-                                     time_var  = "time_discont",
-                                     event_var = "sens_discont",
-                                     interval_length = 14)
-
-risk$tr3$dis$curve <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_dis, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "year"),
-  horizons = HORIZONS_CURVE, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = FALSE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
-
-
-risk$tr3$dis$ci <- predict_cuminc_rmst(
-  Dat_expanded = long_dat_dis, 
-  trt_var = "trt",
-  covs = c("ddose_prev", "year"),
-  horizons = HORIZONS_CI, 
-  cluster_var = "studyid_rev",
-  samples = 499, 
-  conf_int = TRUE, 
-  ref_group = "no reversion",
-  wt_type = "wt_trunc", 
-  rmst_tau = 365
-)
+# TR3 Discontinuation
+long_dat_dis_3 <- expand_person_period(ps_fit_3$data_weights, time_var = "time_discont", event_var = "sens_discont", interval_length = 14)
+risk$tr3$dis$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_dis_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+risk$tr3$dis$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_dis_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
 
 saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d_5cat.rds"))
+
+cat("\n=== Done! All 5-Category Outcome Models Saved ===\n")
