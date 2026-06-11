@@ -234,7 +234,7 @@ p_od <- forest(
   vert_line = c(-3, -2, -1, 1, 2, 3),
   ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
-  title = "Methadone interruption 3-4 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
+#  title = "Methadone interruption 3-4 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
                        vertline_col = "grey50", 
@@ -256,7 +256,7 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3550, height = 5250, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3550, height = 5150, res = 300)
 p_od
 dev.off()
 
@@ -281,7 +281,7 @@ p_dis <- forest(
   vert_line = c(-15, -10, -5, 5, 10, 15),
   ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
-  title = "Methadone interruption 3-4 Days: Adjusted risk differences at 12 Months for OAT discontinuation\n",
+# title = "Methadone interruption 3-4 Days: Adjusted risk differences at 12 Months for OAT discontinuation",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
                        vertline_col = "grey50", 
@@ -304,6 +304,6 @@ for(i in 1:nrow(plot_data_dis)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3550, height = 5250, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3550, height = 5150, res = 300)
 p_dis
 dev.off()
