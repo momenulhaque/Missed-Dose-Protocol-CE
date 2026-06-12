@@ -790,7 +790,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 risk$tr2$all$dis$curve <- predict_cuminc_rmst(
   Dat_expanded = long_dat,
   trt_var = "trt", 
-  covs =c("ddose_prev", "prior_episode"),  
+  covs = c("ddose_prev", "prior_episode"),  
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
   samples = 499, 

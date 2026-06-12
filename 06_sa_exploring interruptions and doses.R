@@ -89,6 +89,7 @@ clean_trt_all <- function(dat) {
 
 # 1. First-interruption-in-any-episode ############
 raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+names(raw_all)
 
 dat_tr2_first <- raw_all |>
   filter(trial_gap %in% 3:4) |>

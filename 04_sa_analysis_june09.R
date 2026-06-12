@@ -880,331 +880,30 @@ risk$tr3$dis$ci <- predict_cuminc_rmst(
 saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d_sa2.rds"))
 
 
+# THREE SA #############
 
-
-
-# 5 category exposure ###########
 library(tidyverse)
 library(haven)
 library(survival)
 library(sandwich)
+library(data.table)
 
-## 1. SETUP & DATA PREPARATION --------------------------------------------------
+## 1. SETUP & DIRECTORIES -------------------------------------------------------
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
-dir.create(RES_DIR, showWarnings = FALSE, recursive = TRUE)
-dir.create(paste0(RES_DIR, "Risk/"), showWarnings = FALSE, recursive = TRUE)
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+SA_DIR    <- paste0(RES_DIR, "Sensitivities/")
+RISK_DIR  <- paste0(SA_DIR, "Risk/")
 
-TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <50%", "increase >=50%")
-clust_vars <- c("studyid_rev", "episode", "time0")
-
-default_out_vars <- c("sens_discont", "time_discont", 
-                      "sens_od_acute", "time_od_acute", 
-                      "sens_all_acute", "time_all_acute")
-
-baselinevars <- c("sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
-                  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
-                  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
-                  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
-                  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss")
-
-continuous_vars <- c("ddose_prev", "year", "ret_length")
-
-# Custom cleaner mapping the relative dose changes
-clean_trt_all <- function(dat) {
-  dat |>
-    mutate(
-      trt_s456 = case_when(
-        ddose_rev == 0 ~ "no reversion",
-        ddose_rev > 0 & ddose_rev < 50  ~ "1-<50%",
-        (!is.na(ddose) & ddose < ddose_prev & ddose <= 40) | ddose_rev >= 50 ~ ">=50%/<=40mg",
-        ddose_rev < 0 & ddose_rev > -50  ~ "increase <50%",
-        ddose_rev <= -50  ~ "increase >=50%", # <= captures all increases of 50% or more (negative sign)
-        TRUE ~ NA_character_
-      ),
-      trt_s456 = factor(trt_s456, levels = TRT_LEVELS),
-      prior_episode = as.numeric(episode - 1)
-    ) |>
-    rename(trt = trt_s456) |>
-    filter(trt %in% TRT_LEVELS) |>
-    group_by(studyid_rev, episode) |>
-    mutate(
-      prior_gap     = cumsum(gap_days),
-      prior_gap_num = row_number()
-    ) %>%
-    ungroup()
-}
-
-cat("\n--- Loading & Cleaning Data ---\n")
-raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
-
-dat_tr2_all <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_all() 
-dat_tr3_all <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_all()
-
-cat("\nTR2 Exposure Distribution:\n")
-print(dat_tr2_all %>% count(trt))
-cat("\nTR3 Exposure Distribution:\n")
-print(dat_tr3_all %>% count(trt))
-
-rm(raw_all); gc()
-
-
-## 2. PROPENSITY SCORE MODELS ---------------------------------------------------
-cat("\n--- Running PS Models ---\n")
-
-ps_tr2 <- ps_model_wt(
-  dat             = dat_tr2_all, 
-  exposure        = "trt",
-  baselinevars    = c(baselinevars, "prior_episode"),
-  continuous_vars = c(continuous_vars, "prior_episode"),
-  out_vars        = default_out_vars,
-  clust_vars      = clust_vars
-)
-saveRDS(ps_tr2, paste0(RES_DIR, "ps_weight_tr2_34d_5cat.rds"))
-
-ps_tr3 <- ps_model_wt(
-  dat             = dat_tr3_all, 
-  exposure        = "trt",
-  baselinevars    = c(baselinevars, "prior_episode"),
-  continuous_vars = c(continuous_vars, "prior_episode"),
-  out_vars        = default_out_vars,
-  clust_vars      = clust_vars
-)
-saveRDS(ps_tr3, paste0(RES_DIR, "ps_weight_tr3_514d_5cat.rds"))
-
-
-## 3. OUTCOME MODELS ------------------------------------------------------------
-cat("\n--- Running Outcome Models ---\n")
-
-predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
-                                cluster_var, samples = 1000, conf_int = TRUE,
-                                ref_group = "no reversion", wt_type="wt_trunc",
-                                rmst_tau = 365) {
-  
-  # Formula for pooled logistic regression
-  covs1 <- paste0(c(trt_var, "ns(interval, df = 3)", covs), collapse = "+")
-  plr_formula <- as.formula(paste("event ~", covs1))
-  
-  # Fit GLM using quasibinomial to suppress fractional weight warnings
-  model <- glm(plr_formula, data = Dat_expanded,
-               family = quasibinomial(), weights = Dat_expanded[[wt_type]])
-  
-  # Cluster-robust covariance
-  V <- sandwich::vcovCL(model, cluster = Dat_expanded[[cluster_var]], type = NULL,
-                        sandwich = TRUE, fix = FALSE)
-  
-  coefs <- coef(model)
-  
-  # Function to calculate risk at a given horizon
-  risk_fun <- function(coef_draw, h) {
-    nd <- Dat_expanded %>% filter(stop <= h)
-    
-    risks <- lapply(unique(Dat_expanded[[trt_var]]), function(trt_level) {
-      nd_trt <- nd
-      nd_trt[[trt_var]] <- trt_level
-      
-      mm_trt <- model.matrix(delete.response(terms(model)), nd_trt)
-      p_trt <- plogis(mm_trt %*% coef_draw)
-      nd_trt$p_event <- p_trt
-      
-      df_pred <- nd_trt %>%
-        group_by(.data[[cluster_var]]) %>%
-        summarise(surv = prod(1 - p_event), .groups = "drop") %>%
-        mutate(risk = 1 - surv)
-      
-      tibble(trt = as.character(trt_level), horizon = h, risk = mean(df_pred$risk))
-    })
-    
-    bind_rows(risks)
-  }
-  
-  # Reference group check
-  if(is.null(ref_group)) {
-    ref_group <- as.character(unique(Dat_expanded[[trt_var]]))[1]
-  }
-  
-  # Point estimates
-  point <- bind_rows(lapply(horizons, function(h) risk_fun(coefs, h)))
-  
-  if(!conf_int) {
-    res <- list(risks = point)
-    
-    # Point estimate for RMST if requested
-    if(!is.null(rmst_tau)) {
-      if(max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
-      
-      point_rmst <- point %>%
-        filter(horizon <= rmst_tau) %>%
-        group_by(trt) %>%
-        arrange(horizon) %>%
-        mutate(
-          survival = 1 - risk,
-          time_diff = horizon - dplyr::lag(horizon, default = 0),
-          area = dplyr::lag(survival, default = 1) * time_diff
-        ) %>%
-        summarise(RMST = sum(area), .groups = "drop") %>%
-        mutate(
-          ref_RMST = RMST[trt == ref_group],
-          RMST_diff = ifelse(trt == ref_group, 0, RMST - ref_RMST)
-        ) %>% dplyr::select(-ref_RMST) # <-- Explicitly namespaced to avoid MASS collision
-      
-      res$rmst <- point_rmst
-    }
-    return(res)
-  }
-  
-  # Simulate coefficient draws for CI
-  sim_coefs <- mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
-  
-  sim_list <- lapply(seq_len(nrow(sim_coefs)), function(i) {
-    bind_rows(lapply(horizons, function(h) risk_fun(sim_coefs[i,], h)))
-  })
-  sim_df <- bind_rows(sim_list, .id = "sim")
-  
-  # Risk CI
-  risk_ci <- sim_df %>%
-    group_by(trt, horizon) %>%
-    summarise(
-      risk_lower = quantile(risk, 0.025),
-      risk_upper = quantile(risk, 0.975),
-      risk = mean(risk),  # point estimate from simulation
-      .groups = "drop"
-    )
-  
-  # Compute RD and RR in each simulation
-  sim_contrasts <- sim_df %>%
-    group_by(sim, horizon) %>%
-    mutate(ref_risk = risk[trt == ref_group]) %>%
-    filter(trt != ref_group) %>%
-    mutate(
-      RD = risk - ref_risk,
-      RR = risk / ref_risk
-    )
-  
-  # Summarise RD and RR
-  contrast_ci <- sim_contrasts %>%
-    group_by(trt, horizon) %>%
-    summarise(
-      RD_lower = quantile(RD, 0.025),
-      RD_upper = quantile(RD, 0.975),
-      RD = mean(RD),
-      RR_lower = quantile(RR, 0.025),
-      RR_upper = quantile(RR, 0.975),
-      RR = mean(RR),
-      .groups = "drop"
-    )
-  
-  res <- list(
-    risks = risk_ci,
-    contrasts = contrast_ci,
-    ref_group = ref_group
-  )
-  
-  # Compute RMST distribution if requested
-  if (!is.null(rmst_tau)) {
-    if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
-    
-    sim_rmst <- sim_df %>%
-      filter(horizon <= rmst_tau) %>%
-      group_by(sim, trt) %>%
-      arrange(horizon) %>%
-      mutate(
-        survival = 1 - risk,
-        time_diff = horizon - dplyr::lag(horizon, default = 0),
-        area = dplyr::lag(survival, default = 1) * time_diff
-      ) %>%
-      summarise(RMST = sum(area), .groups = "drop")
-    
-    rmst_ci <- sim_rmst %>%
-      group_by(trt) %>%
-      summarise(
-        RMST_lower = quantile(RMST, 0.025),
-        RMST_upper = quantile(RMST, 0.975),
-        RMST = mean(RMST),
-        .groups = "drop"
-      )
-    
-    rmst_contrasts <- sim_rmst %>%
-      group_by(sim) %>%
-      mutate(ref_RMST = RMST[trt == ref_group]) %>%
-      filter(trt != ref_group) %>%
-      mutate(RMST_diff = RMST - ref_RMST) %>%
-      group_by(trt) %>%
-      summarise(
-        RMST_diff_lower = quantile(RMST_diff, 0.025),
-        RMST_diff_upper = quantile(RMST_diff, 0.975),
-        RMST_diff = mean(RMST_diff),
-        .groups = "drop"
-      )
-    
-    res$rmst <- rmst_ci
-    res$rmst_contrasts <- rmst_contrasts
-  }
-  
-  return(res)
-}
-
+dir.create(SA_DIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(RISK_DIR, showWarnings = FALSE, recursive = TRUE)
 
 HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
-HORIZONS_CI    <- sort(c(HORIZONS_CURVE, c(30, 60, 90, 180)))
-
-risk <- list(
-  tr2 = list(od = list(), dis = list()),
-  tr3 = list(od = list(), dis = list())
-)
-
-# === TRIAL 2 (3-4 Days) ===
-cat("Processing Trial 2 Outcomes...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr2_34d_5cat.rds"))
-
-# TR2 Overdose
-long_dat_od <- expand_person_period(ps_fit$data_weights, time_var = "time_od_acute", event_var = "sens_od_acute", interval_length = 14)
-risk$tr2$od$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_od, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-risk$tr2$od$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_od, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-
-# TR2 Discontinuation
-long_dat_dis <- expand_person_period(ps_fit$data_weights, time_var = "time_discont", event_var = "sens_discont", interval_length = 14)
-risk$tr2$dis$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_dis, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-risk$tr2$dis$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_dis, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-
-saveRDS(risk$tr2, paste0(RES_DIR, "Risk/", "risk_tr2_34d_5cat.rds"))
-
-
-# === TRIAL 3 (5-14 Days) ===
-cat("Processing Trial 3 Outcomes...\n")
-ps_fit_3 <- readRDS(paste0(RES_DIR, "ps_weight_tr3_514d_5cat.rds"))
-
-# TR3 Overdose
-long_dat_od_3 <- expand_person_period(ps_fit_3$data_weights, time_var = "time_od_acute", event_var = "sens_od_acute", interval_length = 14)
-risk$tr3$od$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_od_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-risk$tr3$od$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_od_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-
-# TR3 Discontinuation
-long_dat_dis_3 <- expand_person_period(ps_fit_3$data_weights, time_var = "time_discont", event_var = "sens_discont", interval_length = 14)
-risk$tr3$dis$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_dis_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-risk$tr3$dis$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_dis_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-
-saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d_5cat.rds"))
-
-cat("\n=== Done! All 5-Category Outcome Models Saved ===\n")
-
-
-
-# ALL-CAUSE ACUTE CARE VISITS ###########
-library(tidyverse)
-library(haven)
-library(survival)
-library(sandwich)
-
-## 1. SETUP & DATA PREPARATION --------------------------------------------------
-DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
-dir.create(RES_DIR, showWarnings = FALSE, recursive = TRUE)
-dir.create(paste0(RES_DIR, "Risk/"), showWarnings = FALSE, recursive = TRUE)
+HORIZONS_CI    <- sort(unique(c(HORIZONS_CURVE, c(30, 60, 90, 180))))
 
 TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
 clust_vars <- c("studyid_rev", "episode", "time0")
 
+# Default variables
 default_out_vars <- c("sens_discont", "time_discont", 
                       "sens_od_acute", "time_od_acute", 
                       "sens_all_acute", "time_all_acute")
@@ -1217,124 +916,75 @@ baselinevars <- c("sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
 
 continuous_vars <- c("ddose_prev", "year", "ret_length")
 
-# Custom cleaner mapping the relative dose changes
-
-clean_trt_all <- function(dat) {
-  dat |>
-    mutate(
-      trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456)
-    ) |>
-    rename(trt = trt_s456) |>
-    filter(trt %in% TRT_LEVELS) |>
-    mutate(trt = factor(trt, levels = TRT_LEVELS),
-           prior_episode = as.numeric(episode - 1)) |>
-    group_by(studyid_rev, episode) |>
-    mutate(
-      prior_gap     = cumsum(gap_days),
-      prior_gap_num = row_number()
-    ) %>%
-    ungroup()
+# CORE OUTCOME FUNCTION
+predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
+                                     cluster_var, samples = 1000, conf_int = TRUE,
+                                     ref_group = "no reversion", wt_type = "wt_trunc",
+                                     rmst_tau = 365) {
   
-}
-
-cat("\n--- Loading & Cleaning Data ---\n")
-raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
-
-dat_tr2_all <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_all() 
-dat_tr3_all <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_all()
-
-cat("\nTR2 Exposure Distribution:\n")
-print(dat_tr2_all %>% count(trt))
-cat("\nTR3 Exposure Distribution:\n")
-print(dat_tr3_all %>% count(trt))
-
-rm(raw_all); gc()
-
-
-## 2. PROPENSITY SCORE MODELS ---------------------------------------------------
-cat("\n--- Running PS Models ---\n")
-
-ps_tr2 <- ps_model_wt(
-  dat             = dat_tr2_all, 
-  exposure        = "trt",
-  baselinevars    = c(baselinevars, "prior_episode"),
-  continuous_vars = c(continuous_vars, "prior_episode"),
-  out_vars        = default_out_vars,
-  clust_vars      = clust_vars
-)
-saveRDS(ps_tr2, paste0(RES_DIR, "ps_weight_tr2_34d_all_acute.rds"))
-
-ps_tr3 <- ps_model_wt(
-  dat             = dat_tr3_all, 
-  exposure        = "trt",
-  baselinevars    = c(baselinevars, "prior_episode"),
-  continuous_vars = c(continuous_vars, "prior_episode"),
-  out_vars        = default_out_vars,
-  clust_vars      = clust_vars
-)
-saveRDS(ps_tr3, paste0(RES_DIR, "ps_weight_tr3_514d_all_acute.rds"))
-
-
-## 3. OUTCOME MODELS ------------------------------------------------------------
-cat("\n--- Running Outcome Models ---\n")
-
-predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
-                                cluster_var, samples = 1000, conf_int = TRUE,
-                                ref_group = "no reversion", wt_type="wt_trunc",
-                                rmst_tau = 365) {
-  
-  # Formula for pooled logistic regression
+  # 1. Fit pooled logistic regression
   covs1 <- paste0(c(trt_var, "ns(interval, df = 3)", covs), collapse = "+")
   plr_formula <- as.formula(paste("event ~", covs1))
   
-  # Fit GLM using quasibinomial to suppress fractional weight warnings
   model <- glm(plr_formula, data = Dat_expanded,
                family = quasibinomial(), weights = Dat_expanded[[wt_type]])
   
-  # Cluster-robust covariance
   V <- sandwich::vcovCL(model, cluster = Dat_expanded[[cluster_var]], type = NULL,
                         sandwich = TRUE, fix = FALSE)
-  
   coefs <- coef(model)
   
-  # Function to calculate risk at a given horizon
-  risk_fun <- function(coef_draw, h) {
-    nd <- Dat_expanded %>% filter(stop <= h)
-    
-    risks <- lapply(unique(Dat_expanded[[trt_var]]), function(trt_level) {
-      nd_trt <- nd
-      nd_trt[[trt_var]] <- trt_level
-      
-      mm_trt <- model.matrix(delete.response(terms(model)), nd_trt)
-      p_trt <- plogis(mm_trt %*% coef_draw)
-      nd_trt$p_event <- p_trt
-      
-      df_pred <- nd_trt %>%
-        group_by(.data[[cluster_var]]) %>%
-        summarise(surv = prod(1 - p_event), .groups = "drop") %>%
-        mutate(risk = 1 - surv)
-      
-      tibble(trt = as.character(trt_level), horizon = h, risk = mean(df_pred$risk))
-    })
-    
-    bind_rows(risks)
+  # 2. Reference group & Factor Level Preservation
+  is_trt_factor <- is.factor(Dat_expanded[[trt_var]])
+  if (is_trt_factor) {
+    trt_levels <- levels(Dat_expanded[[trt_var]])
+  } else {
+    trt_levels <- as.character(unique(Dat_expanded[[trt_var]]))
   }
   
-  # Reference group check
-  if(is.null(ref_group)) {
-    ref_group <- as.character(unique(Dat_expanded[[trt_var]]))[1]
+  if (is.null(ref_group)) ref_group <- trt_levels[1]
+  
+  # 3. Pre-compute Design Matrices using data.table for extreme speed
+  dt <- as.data.table(Dat_expanded)
+  setorderv(dt, c(cluster_var, "stop")) 
+  
+  # Build a list of model matrices (one for each treatment level) ONCE.
+  mm_list <- lapply(trt_levels, function(lvl) {
+    dt_temp <- copy(dt)
+    if (is_trt_factor) {
+      dt_temp[[trt_var]] <- factor(lvl, levels = trt_levels)
+    } else {
+      dt_temp[[trt_var]] <- lvl
+    }
+    model.matrix(delete.response(terms(model)), data = dt_temp, xlev = model$xlevels)
+  })
+  names(mm_list) <- trt_levels
+  
+  # 4. Vectorized Risk Function (Runs strictly on pre-computed matrices)
+  fast_risk_fun <- function(coef_draw) {
+    res_list <- vector("list", length(trt_levels))
+    for (i in seq_along(trt_levels)) {
+      lvl <- trt_levels[i]
+      dt[, p_event := plogis(mm_list[[lvl]] %*% coef_draw)]
+      dt[, cum_surv := cumprod(1 - p_event), by = cluster_var]
+      
+      risks_h <- numeric(length(horizons))
+      for (j in seq_along(horizons)) {
+        h <- horizons[j]
+        risk_val <- 1 - dt[stop <= h, .(last_surv = cum_surv[.N]), by = cluster_var][, mean(last_surv)]
+        risks_h[j] <- risk_val
+      }
+      res_list[[i]] <- data.table(trt = lvl, horizon = horizons, risk = risks_h)
+    }
+    rbindlist(res_list)
   }
   
-  # Point estimates
-  point <- bind_rows(lapply(horizons, function(h) risk_fun(coefs, h)))
+  # 5. Point Estimates
+  point <- fast_risk_fun(coefs)
   
-  if(!conf_int) {
-    res <- list(risks = point)
-    
-    # Point estimate for RMST if requested
-    if(!is.null(rmst_tau)) {
-      if(max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
-      
+  if (!conf_int) {
+    res <- list(risks = as_tibble(point))
+    if (!is.null(rmst_tau)) {
+      if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
       point_rmst <- point %>%
         filter(horizon <= rmst_tau) %>%
         group_by(trt) %>%
@@ -1348,42 +998,35 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
         mutate(
           ref_RMST = RMST[trt == ref_group],
           RMST_diff = ifelse(trt == ref_group, 0, RMST - ref_RMST)
-        ) %>% dplyr::select(-ref_RMST) # <-- Explicitly namespaced to avoid MASS collision
-      
+        ) %>% select(-ref_RMST)
       res$rmst <- point_rmst
     }
     return(res)
   }
   
-  # Simulate coefficient draws for CI
+  # 6. Sequential Simulation for Confidence Intervals
   sim_coefs <- mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
-  
   sim_list <- lapply(seq_len(nrow(sim_coefs)), function(i) {
-    bind_rows(lapply(horizons, function(h) risk_fun(sim_coefs[i,], h)))
+    fast_risk_fun(sim_coefs[i, ])
   })
-  sim_df <- bind_rows(sim_list, .id = "sim")
+  sim_df <- rbindlist(sim_list, idcol = "sim")
   
-  # Risk CI
+  # 7. Compute Final Statistics
   risk_ci <- sim_df %>%
     group_by(trt, horizon) %>%
     summarise(
       risk_lower = quantile(risk, 0.025),
       risk_upper = quantile(risk, 0.975),
-      risk = mean(risk),  # point estimate from simulation
+      risk = mean(risk), 
       .groups = "drop"
     )
   
-  # Compute RD and RR in each simulation
   sim_contrasts <- sim_df %>%
     group_by(sim, horizon) %>%
     mutate(ref_risk = risk[trt == ref_group]) %>%
     filter(trt != ref_group) %>%
-    mutate(
-      RD = risk - ref_risk,
-      RR = risk / ref_risk
-    )
+    mutate(RD = risk - ref_risk, RR = risk / ref_risk)
   
-  # Summarise RD and RR
   contrast_ci <- sim_contrasts %>%
     group_by(trt, horizon) %>%
     summarise(
@@ -1396,16 +1039,11 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
       .groups = "drop"
     )
   
-  res <- list(
-    risks = risk_ci,
-    contrasts = contrast_ci,
-    ref_group = ref_group
-  )
+  res <- list(risks = risk_ci, contrasts = contrast_ci, ref_group = ref_group)
   
-  # Compute RMST distribution if requested
+  # 8. Compute RMST distributions
   if (!is.null(rmst_tau)) {
     if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
-    
     sim_rmst <- sim_df %>%
       filter(horizon <= rmst_tau) %>%
       group_by(sim, trt) %>%
@@ -1419,12 +1057,7 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
     
     rmst_ci <- sim_rmst %>%
       group_by(trt) %>%
-      summarise(
-        RMST_lower = quantile(RMST, 0.025),
-        RMST_upper = quantile(RMST, 0.975),
-        RMST = mean(RMST),
-        .groups = "drop"
-      )
+      summarise(RMST_lower = quantile(RMST, 0.025), RMST_upper = quantile(RMST, 0.975), RMST = mean(RMST), .groups = "drop")
     
     rmst_contrasts <- sim_rmst %>%
       group_by(sim) %>%
@@ -1432,49 +1065,347 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
       filter(trt != ref_group) %>%
       mutate(RMST_diff = RMST - ref_RMST) %>%
       group_by(trt) %>%
-      summarise(
-        RMST_diff_lower = quantile(RMST_diff, 0.025),
-        RMST_diff_upper = quantile(RMST_diff, 0.975),
-        RMST_diff = mean(RMST_diff),
-        .groups = "drop"
-      )
+      summarise(RMST_diff_lower = quantile(RMST_diff, 0.025), RMST_diff_upper = quantile(RMST_diff, 0.975), RMST_diff = mean(RMST_diff), .groups = "drop")
     
     res$rmst <- rmst_ci
     res$rmst_contrasts <- rmst_contrasts
   }
-  
   return(res)
 }
 
+## 2. AUTOMATION WRAPPERS -------------------------------------------------------
+run_ps_safely <- function(dat, ps_out_file, exposure_var = "trt", base_vars, cont_vars, out_vars, c_vars = c("studyid_rev", "episode", "time0")) {
+  if (file.exists(ps_out_file)) {
+    cat(sprintf("[SKIPPED] PS Model already exists: %s\n", basename(ps_out_file)))
+    return(readRDS(ps_out_file))
+  }
+  cat(sprintf("[RUNNING] Fitting PS Model: %s\n", basename(ps_out_file)))
+  ps_fit <- ps_model_wt(
+    dat = dat, exposure = exposure_var, baselinevars = base_vars,
+    continuous_vars = cont_vars, out_vars = out_vars, clust_vars = c_vars
+  )
+  saveRDS(ps_fit, ps_out_file)
+  return(ps_fit)
+}
 
-HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
-HORIZONS_CI    <- sort(c(HORIZONS_CURVE, c(30, 60, 90, 180)))
+run_outcome_safely <- function(ps_file, risk_out_file, time_var, event_var, covs, samples = 299) {
+  if (file.exists(risk_out_file)) {
+    cat(sprintf("  [SKIPPED] Outcome already exists: %s\n", basename(risk_out_file)))
+    return(invisible())
+  }
+  
+  cat(sprintf("  [RUNNING] Generating Outcome: %s\n", basename(risk_out_file)))
+  ps_fit <- readRDS(ps_file)
+  
+  long_dat <- expand_person_period(
+    ps_fit$data_weights, 
+    time_var = time_var, 
+    event_var = event_var, 
+    interval_length = 14
+  )
+  
+  res <- list()
+  res$curve <- predict_cuminc_rmst_fast(
+    Dat_expanded = long_dat, trt_var = "trt", covs = covs,
+    horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
+    samples = samples, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365
+  )
+  
+  res$ci <- predict_cuminc_rmst_fast(
+    Dat_expanded = long_dat, trt_var = "trt", covs = covs,
+    horizons = HORIZONS_CI, cluster_var = "studyid_rev",
+    samples = samples, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365
+  )
+  
+  final_obj <- list()
+  trial_key <- ifelse(grepl("tr2", risk_out_file), "tr2", "tr3")
+  outcome_key <- ifelse(grepl("discont", risk_out_file), "dis", "od")
+  
+  final_obj[[trial_key]][[outcome_key]] <- res
+  saveRDS(final_obj[[trial_key]], risk_out_file)
+  
+  rm(long_dat, ps_fit, res, final_obj); gc()
+}
 
-risk <- list(
-  tr2 = list(od = list(), dis = list()),
-  tr3 = list(od = list(), dis = list())
+## 3. ANALYSIS 1: ALL-CAUSE ACUTE CARE ------------------------------------------
+cat("\n======================================================\n")
+cat("=== ANALYSIS 1: ALL-CAUSE ACUTE CARE               ===\n")
+cat("======================================================\n")
+
+ps_file_tr2_main <- paste0(RES_DIR, "PScore/ps_weight_tr2_34d_all.rds")
+ps_file_tr3_main <- paste0(RES_DIR, "PScore/ps_weight_tr3_all.rds")
+
+# Trial 2
+run_outcome_safely(
+  ps_file = ps_file_tr2_main,
+  risk_out_file = paste0(RISK_DIR, "risk_tr2_34d_all_acute.rds"),
+  time_var = "time_all_acute", event_var = "sens_all_acute",
+  covs = c("ddose_prev", "prior_episode"), samples = 299
 )
 
-# === TRIAL 2 (3-4 Days) ===
-cat("Processing Trial 2 Outcomes...\n")
-ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr2_34d_all_acute.rds"))
-
-# TR2 Overdose
-long_dat_od <- expand_person_period(ps_fit$data_weights, time_var = "time_all_acute", event_var = "sens_all_acute", interval_length = 14)
-risk$tr2$od$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_od, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 299, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-risk$tr2$od$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_od, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 299, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-
-saveRDS(risk$tr2, paste0(RES_DIR, "Risk/", "risk_tr2_34d_all_acute.rds"))
+# Trial 3
+run_outcome_safely(
+  ps_file = ps_file_tr3_main,
+  risk_out_file = paste0(RISK_DIR, "risk_tr3_514d_all_acute.rds"),
+  time_var = "time_all_acute", event_var = "sens_all_acute",
+  covs = c("ddose_prev", "year"), samples = 299
+)
 
 
-# === TRIAL 3 (5-14 Days) ===
-cat("Processing Trial 3 Outcomes...\n")
-ps_fit_3 <- readRDS(paste0(RES_DIR, "ps_weight_tr3_514d_all_acute.rds"))
+## 4. ANALYSIS 2: 30-DAY GAP DISCONTINUATION ------------------------------------
+cat("\n======================================================\n")
+cat("=== ANALYSIS 2: 30-DAY GAP DISCONTINUATION         ===\n")
+cat("======================================================\n")
 
-# TR3 Overdose
-long_dat_od_3 <- expand_person_period(ps_fit_3$data_weights, time_var = "time_all_acute", event_var = "sens_all_acute", interval_length = 14)
-risk$tr3$od$curve <- predict_cuminc_rmst(Dat_expanded = long_dat_od_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = 499, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
-risk$tr3$od$ci <- predict_cuminc_rmst(Dat_expanded = long_dat_od_3, trt_var = "trt", covs = c("ddose_prev", "prior_episode"), horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = 499, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+# File targets
+ps_tr2_dis30_file <- paste0(SA_DIR, "ps_weight_tr2_34d_discont30.rds")
+ps_tr3_dis30_file <- paste0(SA_DIR, "ps_weight_tr3_514d_discont30.rds")
 
-saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d_all_acute.rds"))
+# Check and build dedicated PS models if missing
+if (!file.exists(ps_tr2_dis30_file) || !file.exists(ps_tr3_dis30_file)) {
+  cat("Loading data to generate Discont-30 PS Models...\n")
+  
+  clean_trt_standard <- function(dat) {
+    dat |>
+      mutate(
+        trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456),
+        trt_s456 = factor(trt_s456, levels = TRT_LEVELS),
+        prior_episode = as.numeric(episode - 1)
+      ) |>
+      rename(trt = trt_s456) |>
+      filter(trt %in% TRT_LEVELS) |>
+      group_by(studyid_rev, episode) |>
+      mutate(prior_gap = cumsum(gap_days), prior_gap_num = row_number()) %>%
+      ungroup()
+  }
+  
+  raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+  
+  dat_tr2_dis30 <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_standard() 
+  dat_tr3_dis30 <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_standard()
+  rm(raw_all); gc()
+  
+  # Ensure the specific discont30 outcome vars are included
+  out_vars_dis30 <- c("sens_discont30", "time_discont30", "sens_od_acute", "time_od_acute", "sens_all_acute", "time_all_acute")
+  
+  run_ps_safely(dat_tr2_dis30, ps_tr2_dis30_file, "trt", c(baselinevars, "prior_episode"), c(continuous_vars, "prior_episode"), out_vars_dis30)
+  run_ps_safely(dat_tr3_dis30, ps_tr3_dis30_file, "trt", c(baselinevars, "prior_episode"), c(continuous_vars, "prior_episode"), out_vars_dis30)
+  rm(dat_tr2_dis30, dat_tr3_dis30); gc()
+}
 
+# Run Outcomes
+# Trial 2
+run_outcome_safely(
+  ps_file = ps_tr2_dis30_file,
+  risk_out_file = paste0(RISK_DIR, "risk_tr2_34d_discont30.rds"),
+  time_var = "time_discont30", event_var = "sens_discont30",
+  covs = c("ddose_prev", "prior_episode"), samples = 299
+)
+
+# Trial 3 
+run_outcome_safely(
+  ps_file = ps_tr3_dis30_file,
+  risk_out_file = paste0(RISK_DIR, "risk_tr3_514d_discont30.rds"),
+  time_var = "time_discont30", event_var = "sens_discont30",
+  covs = c("ddose_prev", "year"), samples = 299
+)
+
+
+## 5. ANALYSIS 3: 5-CATEGORY EXPOSURE -------------------------------------------
+cat("\n======================================================\n")
+cat("=== ANALYSIS 3: 5-CATEGORY DOSE EXPOSURE           ===\n")
+cat("======================================================\n")
+
+ps_tr2_5cat_file <- paste0(SA_DIR, "ps_weight_tr2_34d_5cat.rds")
+ps_tr3_5cat_file <- paste0(SA_DIR, "ps_weight_tr3_514d_5cat.rds")
+
+if (!file.exists(ps_tr2_5cat_file) || !file.exists(ps_tr3_5cat_file)) {
+  cat("Loading data to generate 5-Category PS Models...\n")
+  
+  TRT_LEVELS_5 <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <50%", "increase >=50%")
+  
+  raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+  
+  clean_trt_5cat <- function(dat) {
+    dat |>
+      mutate(
+        trt_s456 = case_when(
+          ddose_rev == 0 ~ "no reversion",
+          ddose_rev > 0 & ddose_rev < 50  ~ "1-<50%",
+          (!is.na(ddose) & ddose < ddose_prev & ddose <= 40) | ddose_rev >= 50 ~ ">=50%/<=40mg",
+          ddose_rev < 0 & ddose_rev > -50  ~ "increase <50%",
+          ddose_rev <= -50  ~ "increase >=50%", 
+          TRUE ~ NA_character_
+        ),
+        trt_s456 = factor(trt_s456, levels = TRT_LEVELS_5),
+        prior_episode = as.numeric(episode - 1)
+      ) |>
+      rename(trt = trt_s456) |>
+      filter(trt %in% TRT_LEVELS_5) |>
+      group_by(studyid_rev, episode) |>
+      mutate(prior_gap = cumsum(gap_days), prior_gap_num = row_number()) %>%
+      ungroup()
+  }
+  
+  dat_tr2_5cat <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_5cat() 
+  dat_tr3_5cat <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_5cat()
+  rm(raw_all); gc()
+  
+  run_ps_safely(dat_tr2_5cat, ps_tr2_5cat_file, "trt", c(baselinevars, "prior_episode"), c(continuous_vars, "prior_episode"), default_out_vars)
+  run_ps_safely(dat_tr3_5cat, ps_tr3_5cat_file, "trt", c(baselinevars, "prior_episode"), c(continuous_vars, "prior_episode"), default_out_vars)
+  rm(dat_tr2_5cat, dat_tr3_5cat); gc()
+}
+
+# TR2 - Overdose
+run_outcome_safely(
+  ps_file = ps_tr2_5cat_file, risk_out_file = paste0(RISK_DIR, "risk_tr2_34d_5cat_od.rds"),
+  time_var = "time_od_acute", event_var = "sens_od_acute", covs = c("ddose_prev", "prior_episode"), samples = 299
+)
+# TR2 - Discontinuation
+run_outcome_safely(
+  ps_file = ps_tr2_5cat_file, risk_out_file = paste0(RISK_DIR, "risk_tr2_34d_5cat_dis.rds"), 
+  time_var = "time_discont", event_var = "sens_discont", covs = c("ddose_prev", "prior_episode"), samples = 299
+)
+
+# TR3 - Overdose
+run_outcome_safely(
+  ps_file = ps_tr3_5cat_file, risk_out_file = paste0(RISK_DIR, "risk_tr3_514d_5cat_od.rds"),
+  time_var = "time_od_acute", event_var = "sens_od_acute", covs = c("ddose_prev", "year"), samples = 299
+)
+# TR3 - Discontinuation
+run_outcome_safely(
+  ps_file = ps_tr3_5cat_file, risk_out_file = paste0(RISK_DIR, "risk_tr3_514d_5cat_dis.rds"),
+  time_var = "time_discont", event_var = "sens_discont", covs = c("ddose_prev", "year"), samples = 299
+)
+
+cat("\n=== PIPELINE COMPLETE ===\n")
+
+
+
+# DISCONT 30 DAYS ########
+
+
+library(tidyverse)
+library(haven)
+library(survival)
+library(sandwich)
+library(data.table)
+
+## 1. SETUP & DIRECTORIES -------------------------------------------------------
+DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+SA_DIR    <- paste0(RES_DIR, "Sensitivities/")
+RISK_DIR  <- paste0(SA_DIR, "Risk/")
+
+dir.create(SA_DIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(RISK_DIR, showWarnings = FALSE, recursive = TRUE)
+
+HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
+HORIZONS_CI    <- sort(unique(c(HORIZONS_CURVE, c(30, 60, 90, 180))))
+
+TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
+clust_vars <- c("studyid_rev", "episode", "time0")
+
+baselinevars <- c("sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
+                  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
+                  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
+                  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
+                  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss")
+
+continuous_vars <- c("ddose_prev", "year", "ret_length")
+
+## 2. AUTOMATION WRAPPERS (Loaded for context) ----------------------------------
+run_ps_safely <- function(dat, ps_out_file, exposure_var = "trt", base_vars, cont_vars, out_vars, c_vars = c("studyid_rev", "episode", "time0")) {
+  if (file.exists(ps_out_file)) {
+    cat(sprintf("[SKIPPED] PS Model already exists: %s\n", basename(ps_out_file)))
+    return(readRDS(ps_out_file))
+  }
+  cat(sprintf("[RUNNING] Fitting PS Model: %s\n", basename(ps_out_file)))
+  ps_fit <- ps_model_wt(dat = dat, exposure = exposure_var, baselinevars = base_vars, continuous_vars = cont_vars, out_vars = out_vars, clust_vars = c_vars)
+  saveRDS(ps_fit, ps_out_file)
+  return(ps_fit)
+}
+
+run_outcome_safely <- function(ps_file, risk_out_file, time_var, event_var, covs, samples = 299) {
+  if (file.exists(risk_out_file)) {
+    cat(sprintf("  [SKIPPED] Outcome already exists: %s\n", basename(risk_out_file)))
+    return(invisible())
+  }
+  cat(sprintf("  [RUNNING] Generating Outcome: %s\n", basename(risk_out_file)))
+  ps_fit <- readRDS(ps_file)
+  
+  long_dat <- expand_person_period(ps_fit$data_weights, time_var = time_var, event_var = event_var, interval_length = 14)
+  res <- list()
+  
+  res$curve <- predict_cuminc_rmst_fast(Dat_expanded = long_dat, trt_var = "trt", covs = covs, horizons = HORIZONS_CURVE, cluster_var = "studyid_rev", samples = samples, conf_int = FALSE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+  res$ci <- predict_cuminc_rmst_fast(Dat_expanded = long_dat, trt_var = "trt", covs = covs, horizons = HORIZONS_CI, cluster_var = "studyid_rev", samples = samples, conf_int = TRUE, ref_group = "no reversion", wt_type = "wt_trunc", rmst_tau = 365)
+  
+  final_obj <- list()
+  trial_key <- ifelse(grepl("tr2", risk_out_file), "tr2", "tr3")
+  final_obj[[trial_key]][["dis"]] <- res # Hardcoded to "dis" since this is exclusively a discont analysis
+  saveRDS(final_obj[[trial_key]], risk_out_file)
+  rm(long_dat, ps_fit, res, final_obj); gc()
+}
+
+## 3. ANALYSIS: 30-DAY GAP DISCONTINUATION --------------------------------------
+cat("\n======================================================\n")
+cat("=== ANALYSIS: 30-DAY GAP DISCONTINUATION           ===\n")
+cat("======================================================\n")
+
+# File targets
+ps_tr2_dis30_file <- paste0(SA_DIR, "ps_weight_tr2_34d_discont30.rds")
+ps_tr3_dis30_file <- paste0(SA_DIR, "ps_weight_tr3_514d_discont30.rds")
+
+# We only load and clean data if the PS models are missing
+if (!file.exists(ps_tr2_dis30_file) || !file.exists(ps_tr3_dis30_file)) {
+  cat("Loading data to generate Discont-30 PS Models...\n")
+  
+  # Standard 4-category cleaning
+  clean_trt_standard <- function(dat) {
+    dat |>
+      mutate(
+        trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456),
+        trt_s456 = factor(trt_s456, levels = TRT_LEVELS),
+        prior_episode = as.numeric(episode - 1)
+      ) |>
+      rename(trt = trt_s456) |>
+      filter(trt %in% TRT_LEVELS) |>
+      group_by(studyid_rev, episode) |>
+      mutate(prior_gap = cumsum(gap_days), prior_gap_num = row_number()) %>%
+      ungroup()
+  }
+  
+  raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+  
+  dat_tr2_dis30 <- raw_all |> filter(trial_gap %in% 3:4) |> clean_trt_standard() 
+  dat_tr3_dis30 <- raw_all |> filter(trial_cat == "5-14") |> clean_trt_standard()
+  rm(raw_all); gc()
+  
+  # Crucial: Define the out_vars specifically including time_discont30
+  out_vars_dis30 <- c("sens_discont30", "time_discont30", "sens_od_acute", "time_od_acute", "sens_all_acute", "time_all_acute")
+  
+  run_ps_safely(dat_tr2_dis30, ps_tr2_dis30_file, "trt", c(baselinevars, "prior_episode"), c(continuous_vars, "prior_episode"), out_vars_dis30)
+  run_ps_safely(dat_tr3_dis30, ps_tr3_dis30_file, "trt", c(baselinevars, "prior_episode"), c(continuous_vars, "prior_episode"), out_vars_dis30)
+  rm(dat_tr2_dis30, dat_tr3_dis30); gc()
+}
+
+# Run Outcomes using the dedicated PS models
+cat("\nRunning Outcomes...\n")
+
+# Trial 2
+run_outcome_safely(
+  ps_file = ps_tr2_dis30_file,
+  risk_out_file = paste0(RISK_DIR, "risk_tr2_34d_discont30.rds"),
+  time_var = "time_discont30", event_var = "sens_discont30",
+  covs = c("ddose_prev", "prior_episode"), samples = 299
+)
+
+# Trial 3 
+run_outcome_safely(
+  ps_file = ps_tr3_dis30_file,
+  risk_out_file = paste0(RISK_DIR, "risk_tr3_514d_discont30.rds"),
+  time_var = "time_discont30", event_var = "sens_discont30",
+  covs = c("ddose_prev", "year"), samples = 299
+)
+
+cat("\n=== 30-DAY DISCONTINUATION PIPELINE COMPLETE ===\n")

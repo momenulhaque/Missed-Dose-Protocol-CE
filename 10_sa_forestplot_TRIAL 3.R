@@ -6,7 +6,7 @@ library(grid)
 RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 
 # Master Manifest (Trial 3)
-sa_manifest <- tibble::tribble(
+sa_manifest_od <- tibble::tribble(
   ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
   
   "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
@@ -20,20 +20,51 @@ sa_manifest <- tibble::tribble(
   "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr3_514d_SA06_Ret_GT30.rds",
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr3_514d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr3_514d_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr3_514d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr3_514d_SA11_CumOAT_GE1yr.rds",
+  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr3_514d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr3_514d_SA13_30dWashout.rds",    
+
+  "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr3_514d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr3_514d_SA10_PostFentEra.rds",
+  
+  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat_od.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
+  
+  "4. Follow-up", "No truncation of follow-up\nat 12 months", "fivecat", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+
+  "5. Outcome definition", "Overdose-related- acute\ncare visits or death", "standard", "Sensitivities/Risk/risk_tr3_514d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr3_514d_SA16_Composite_OD.rds",
+  
+  "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
+  "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
+  "6. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
+)
+
+
+
+sa_manifest_dis <- tibble::tribble(
+  ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
+  
+  "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
+  
+  "1. Sample restriction", "First interruption in\nfirst episode", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
+  "1. Sample restriction", "Any interruption in\nany episode", "standard", "Sensitivities/Risk/risk_tr3_514d_sa2.rds", "Sensitivities/ps_weight_tr3_514d_sa2.rds",
+  "1. Sample restriction", "People who completed\ninduction", "standard", "Sensitivities/Risk/risk_tr3_514d_SA02_Induction.rds", "Sensitivities/ps_wt_tr3_514d_SA02_Induction.rds",
+  "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr3_514d_SA03_Dose_LT80.rds",
+  "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr3_514d_SA04_Dose_GE80.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr3_514d_SA05_Ret_LE30.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr3_514d_SA06_Ret_GT30.rds",
+  "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr3_514d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr3_514d_SA09_HighFentArea.rds",
+  "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr3_514d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr3_514d_SA11_CumOAT_GE1yr.rds",
+  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr3_514d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr3_514d_SA13_30dWashout.rds",    
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr3_514d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr3_514d_SA10_PostFentEra.rds",
   
-  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
+  "3. Exposure classification", "5 category dose\nadjustment", "fivecat", "Sensitivities/Risk/risk_tr3_514d_5cat_dis.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
   
-  "4. Outcome definition", "30 days washout\nfor prevalent users", "standard", "Sensitivities/Risk/risk_tr3_514d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr3_514d_SA13_30dWashout.rds",
-  "4. Outcome definition", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
-  "4. Outcome definition", "Composite outcome:\nOverdose or death", "standard", "Sensitivities/Risk/risk_tr3_514d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr3_514d_SA16_Composite_OD.rds",
+  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+  
+  "5. Outcome definition", "No dispensation of OAT\nfor 30 consecutive days", "standard", "Sensitivities/Risk/risk_tr3_514d_discont30.rds", "Sensitivities/ps_weight_tr3_514d_discont30.rds",
   
   "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
   "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
   "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
 )
-
 
 trt_clean <- c(
   "no reversion" = "No dose change", 
@@ -220,7 +251,7 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
 
 # 4A. PLOT GENERATION: OVERDOSE ------------------------------------------------
 cat("\n--- Generating Overdose Plot (Trial 3) ---\n")
-plot_data_od <- build_wide_df(manifest = sa_manifest, outcome = "od", max_time = 30)
+plot_data_od <- build_wide_df(manifest = sa_manifest_od, outcome = "od", max_time = 30)
 
 bg_fill_od <- plot_data_od$bg_color
 ci_col_od <- trt_colors[plot_data_od$`Dose adjustment`]
@@ -266,7 +297,7 @@ dev.off()
 # 4B. PLOT GENERATION: DISCONTINUATION -----------------------------------------
 cat("\n--- Generating Discontinuation Plot (Trial 3) ---\n")
 
-plot_data_dis <- build_wide_df(manifest = sa_manifest, outcome = "dis", max_time = 365) %>%
+plot_data_dis <- build_wide_df(manifest = sa_manifest_dis, outcome = "dis", max_time = 365) %>%
   filter(!grepl("Composite outcome", `Sensitivity Analysis`))
 
 bg_fill_dis <- plot_data_dis$bg_color
