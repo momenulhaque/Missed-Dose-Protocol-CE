@@ -184,7 +184,7 @@ p_2a <- forest(
   est = plot_data_2a$rd_pct, lower = plot_data_2a$rd_lower_pct, upper = plot_data_2a$rd_upper_pct,
   ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-2.5, 2.5), ticks_at = c(-2, -1, 0, 1, 2),
   xlab = "Risk difference (%)",
-  title = "A. Difference in risk of overdose-related acute care visits\n",
+  title = "",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
@@ -195,7 +195,7 @@ p_2a_final <- add_grob(p_2a, row = nrow(plot_data_2a) + 2, col = 1:2, order = "b
                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/June09/", "Figure2_A_OD_RD.jpg"), width = 3500, height = 1400, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/", "Figure2_A_OD_RD.jpg"), width = 3500, height = 1300, res = 300)
 p_2a_final
 dev.off()
 
@@ -234,7 +234,7 @@ p_2b <- forest(
   est = plot_data_2b$rd_pct, lower = plot_data_2b$rd_lower_pct, upper = plot_data_2b$rd_upper_pct,
   ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-12.5, 12.5), ticks_at = c(-10, -5, 0, 5, 10),
   xlab = "Risk difference (%)",
-  title = "B. Difference in risk of treatment discontinuation\n",
+  title = "",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
@@ -245,7 +245,7 @@ p_2b_final <- add_grob(p_2b, row = nrow(plot_data_2b) + 2, col = 1:2, order = "b
                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/June09/", "Figure2_B_Discont_RD.jpg"), width = 3500, height = 1400, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/", "Figure2_B_Discont_RD.jpg"), width = 3500, height = 1300, res = 300)
 p_2b_final
 dev.off()
 
