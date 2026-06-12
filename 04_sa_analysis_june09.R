@@ -880,7 +880,7 @@ risk$tr3$dis$ci <- predict_cuminc_rmst(
 saveRDS(risk$tr3, paste0(RES_DIR, "Risk/", "risk_tr3_514d_sa2.rds"))
 
 
-# THREE SA #############
+# FOUR SA #############
 
 library(tidyverse)
 library(haven)
@@ -1282,6 +1282,143 @@ cat("\n=== PIPELINE COMPLETE ===\n")
 
 
 
+
+
+## 6. ANALYSIS 4: 4 DAYS GAP ------------------------------------
+cat("=== ANALYSIS 4: 4 DAYS GAP ===\n")
+# ── Shared settings ────────────────────────────────────────────────────────────
+TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
+
+out_vars   <- c("sens_discont", "time_discont",
+                "sens_od_acute", "time_od_acute",
+                "sens_all_acute", "time_all_acute")
+
+clust_vars <- c("studyid_rev", "episode", "time0")
+
+baselinevars <- c(
+  "sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
+  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
+  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
+  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
+  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss"
+)
+continuous_vars <- c("ddose_prev", "year", "ret_length")
+
+clean_trt_all <- function(dat) {
+  dat |>
+    mutate(
+      trt_s456 = if_else(trt_s456 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s456)
+    ) |>
+    rename(trt = trt_s456) |>
+    filter(trt %in% TRT_LEVELS) |>
+    mutate(trt = factor(trt, levels = TRT_LEVELS),
+           prior_episode = as.numeric(episode - 1)) |>
+    group_by(studyid_rev, episode) |>
+    mutate(
+      prior_gap     = cumsum(gap_days),
+      prior_gap_num = row_number()
+    ) %>%
+    ungroup()
+  
+}
+
+
+
+# First-interruption-in-any-episode 
+raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
+
+dat_tr2_all <- raw_all |>
+  filter(trial_gap %in% 4) |>
+  clean_trt_all() 
+
+ps_tr2_all <- ps_model_wt(
+  dat             = dat_tr2_all,
+  exposure        = "trt",
+  baselinevars    = c(baselinevars, "prior_episode"),
+  continuous_vars = c(continuous_vars, "prior_episode"),
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr2_all, paste0(RES_DIR, "Sensitivities/", "ps_weight_tr2_4d_all.rds"))
+
+
+ps_fit <- readRDS(paste0(RES_DIR, "Sensitivities/", "ps_weight_tr2_4d_all.rds"))
+
+
+
+HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
+HORIZONS_CI    <- sort(unique(c(HORIZONS_CURVE, c(30, 60, 90, 180))))
+
+
+results <- list(od = list(), dis = list())
+
+# Overdose
+long_dat <- expand_person_period(ps_fit$data_weights, 
+                                 time_var = "time_od_acute",
+                                 event_var = "sens_od_acute", 
+                                 interval_length = 14)
+
+results$od$curve <- predict_cuminc_rmst(
+  Dat_expanded = long_dat, 
+  trt_var = "trt", 
+  covs = c("ddose_prev", "prior_episode"), 
+  horizons = HORIZONS_CURVE,
+  cluster_var = "studyid_rev", 
+  samples = 299, 
+  conf_int = FALSE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+results$od$ci <- predict_cuminc_rmst(
+  Dat_expanded = long_dat, 
+  trt_var = "trt", 
+  covs = c("ddose_prev", "prior_episode"), 
+  horizons = HORIZONS_CI,
+  cluster_var = "studyid_rev", 
+  samples = 299, 
+  conf_int = TRUE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+# Discontinuation
+long_dat <- expand_person_period(ps_fit$data_weights, 
+                                 time_var = "time_discont",
+                                 event_var = "sens_discont", 
+                                 interval_length = 14)
+
+results$dis$curve <- predict_cuminc_rmst(
+  Dat_expanded = long_dat,
+  trt_var = "trt", 
+  covs = c("ddose_prev", "prior_episode"),  
+  horizons = HORIZONS_CURVE,
+  cluster_var = "studyid_rev", 
+  samples = 299, 
+  conf_int = FALSE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+results$dis$ci <- predict_cuminc_rmst(
+  Dat_expanded = long_dat, 
+  trt_var = "trt", 
+  covs = c("ddose_prev", "prior_episode"),
+  horizons = HORIZONS_CI,
+  cluster_var = "studyid_rev", 
+  samples = 299, 
+  conf_int = TRUE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+rm(long_dat); gc()
+
+saveRDS(results, paste0(RES_DIR, "Sensitivities/Risk/", "risk_tr2_4d_rmst.rds"))
+
+
+
 # DISCONT 30 DAYS ########
 
 
@@ -1325,6 +1462,7 @@ run_ps_safely <- function(dat, ps_out_file, exposure_var = "trt", base_vars, con
   saveRDS(ps_fit, ps_out_file)
   return(ps_fit)
 }
+
 
 run_outcome_safely <- function(ps_file, risk_out_file, time_var, event_var, covs, samples = 299) {
   if (file.exists(risk_out_file)) {

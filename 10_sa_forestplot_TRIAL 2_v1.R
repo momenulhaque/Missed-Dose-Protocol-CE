@@ -16,7 +16,8 @@ sa_manifest_od <- tibble::tribble(
   "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr2_34d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr2_34d_SA06_Ret_GT30.rds",
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr2_34d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr2_34d_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr2_34d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr2_34d_SA11_CumOAT_GE1yr.rds",
-  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr2_34d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr2_34d_SA13_30dWashout.rds",    
+  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr2_34d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr2_34d_SA13_30dWashout.rds",
+  "1. Sample restriction", "Alternative trial:\nInterruption of 4 days", "standard", "Sensitivities/Risk/risk_tr2_4d_rmst.rds", "Sensitivities/ps_weight_tr2_4d_all.rds",
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr2_34d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr2_34d_SA10_PostFentEra.rds",
   
@@ -44,6 +45,8 @@ sa_manifest_dis <- tibble::tribble(
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr2_34d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr2_34d_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr2_34d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr2_34d_SA11_CumOAT_GE1yr.rds",
   "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr2_34d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr2_34d_SA13_30dWashout.rds",    
+  "1. Sample restriction", "Alternative trial:\nInterruption of 4 days", "standard", "Sensitivities/Risk/risk_tr2_4d_rmst.rds", "Sensitivities/ps_weight_tr2_4d_all.rds",
+  
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr2_34d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr2_34d_SA10_PostFentEra.rds",
   
@@ -278,7 +281,7 @@ for(i in 1:nrow(plot_data_od)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3500, height = 5200, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3500, height = 5400, res = 300)
 p_od
 dev.off()
 
@@ -326,6 +329,6 @@ for(i in 1:nrow(plot_data_dis)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3500, height = 5000, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3500, height = 5200, res = 300)
 p_dis
 dev.off()
