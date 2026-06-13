@@ -92,7 +92,7 @@ plot_km_curve <- function(df) {
     geom_step(linewidth = 1) +
     geom_vline(xintercept = 30, linetype = "dashed", color = "gray60", linewidth = 0.8) +
     scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.15), breaks = seq(0, 0.15, 0.05)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.8)) +
     scale_color_manual(values = trt_colors_km) + 
     labs(title = NULL, x = "Days since time zero\n", y = "Unadjusted Cumulative Incidence (%)") +
     theme_minimal(base_size = 14) +
@@ -246,7 +246,7 @@ plot_km_curve_discont <- function(df) {
   ggplot(df, aes(x = time, y = cum_inc, color = trt_label)) +
     geom_step(linewidth = 1) +
     scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.8)) +
     scale_color_manual(values = trt_colors_km_discont) + 
     labs(
       title = NULL, 
