@@ -175,3 +175,7 @@ jpeg(paste0(RES_DIR, "Figures/June09/eFigure 3B Dose_adjustment_proportions.jpg"
      width = 4800, height = 2600, res = 400)
 print(plot_prop_first)
 dev.off()
+
+
+df_explore_first %>% count(trt_s456)
+df_explore_first %>% group_by(Trial) %>% filter(trt_s456=="increase") %>% count(trt_detailed)
