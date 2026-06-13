@@ -178,4 +178,4 @@ dev.off()
 
 
 df_explore_first %>% count(trt_s456)
-df_explore_first %>% group_by(Trial) %>% filter(trt_s456=="increase") %>% count(trt_detailed)
+df_explore_first %>% group_by(Trial) %>% count(trt_detailed)
