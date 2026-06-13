@@ -1,8 +1,13 @@
-# OVERDOSE #########
 library(tidyverse)
 library(survival)
 library(broom)
 library(patchwork)
+
+source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
 
 # 1. Define color palette
 trt_colors_km <- c(
@@ -12,7 +17,8 @@ trt_colors_km <- c(
   "Dose increase" = "#D62728"                     
 )
 
-# 2. Helper function: Extract and format Kaplan-Meier data (Main Plot)
+# OVERDOSE #########
+
 build_km_df <- function(dat, time_var = "time_od_acute", event_var = "sens_od_acute") {
   dat <- dat %>%
     mutate(
@@ -35,12 +41,10 @@ build_km_df <- function(dat, time_var = "time_od_acute", event_var = "sens_od_ac
     ) %>% select(time, cum_inc, trt_label)
   
   t0 <- expand.grid(time = 0, cum_inc = 0, trt_label = names(trt_colors_km))
-  
   fit_df <- bind_rows(t0, fit_df) %>% arrange(trt_label, time)
   return(fit_df)
 }
 
-# 3. Helper function: Generate Cumulative Event Table
 build_event_table <- function(dat, time_var = "time_od_acute", event_var = "sens_od_acute") {
   dat <- dat %>%
     mutate(
@@ -53,7 +57,6 @@ build_event_table <- function(dat, time_var = "time_od_acute", event_var = "sens
   
   breaks_x <- c(0, 30, 90, 180, 270, 365)
   
-  # A. Calculate cumulative events per treatment (with <10 suppression)
   events_df <- purrr::map_dfr(breaks_x, function(t) {
     dat %>%
       group_by(trt_label) %>%
@@ -62,110 +65,72 @@ build_event_table <- function(dat, time_var = "time_od_acute", event_var = "sens
         raw_count = ifelse(t == 0, 0, sum(!!sym(time_var) <= t & !!sym(event_var) == 1, na.rm = TRUE)),
         .groups = "drop"
       )
-  }) %>%
-    mutate(
-      label_text = case_when(
-        time == 0 ~ "0",
-        raw_count > 0 & raw_count < 10 ~ "<10",
-        TRUE ~ as.character(raw_count)
-      )
-    )
+  }) %>% mutate(label_text = case_when(time == 0 ~ "0", raw_count > 0 & raw_count < 10 ~ "<10", TRUE ~ as.character(raw_count)))
   
-  # B. Calculate total episodes at risk at time t
   at_risk_df <- purrr::map_dfr(breaks_x, function(t) {
-    dat %>%
-      summarise(
-        time = t,
-        # At risk means they have not experienced the event or been censored prior to time t
-        raw_count = sum(!!sym(time_var) >= t, na.rm = TRUE),
-        .groups = "drop"
-      )
-  }) %>%
-    mutate(
-      trt_label = "Total episodes at risk",
-      label_text = as.character(raw_count) # We don't apply <10 to the total at risk
-    )
+    dat %>% summarise(time = t, raw_count = sum(!!sym(time_var) >= t, na.rm = TRUE), .groups = "drop")
+  }) %>% mutate(trt_label = "Total episodes at risk", label_text = as.character(raw_count))
   
-  # C. Combine and order the factors so "Total at risk" goes to the bottom
   table_levels <- c(names(trt_colors_km), "Total episodes at risk")
+  table_df <- bind_rows(events_df, at_risk_df) %>% mutate(trt_label = factor(trt_label, levels = rev(table_levels)))
   
-  table_df <- bind_rows(events_df, at_risk_df) %>%
-    mutate(
-      trt_label = factor(trt_label, levels = rev(table_levels)) 
-    )
-  
-  # Create text-based ggplot table
   ggplot(table_df, aes(x = time, y = trt_label, label = label_text)) +
     geom_text(size = 4.5, color = "black") +
     scale_x_continuous(limits = c(0, 365), breaks = breaks_x) +
-    labs(x = NULL, y = NULL, title = "Risk table") + # Removed y-axis title since row labels are self-explanatory
+    labs(x = NULL, y = NULL, title = "Risk table") + 
     theme_minimal(base_size = 14) +
     theme(
-      panel.grid   = element_blank(),
-      axis.line    = element_blank(),
-      axis.ticks   = element_blank(),
-      axis.text.x  = element_blank(), 
-      axis.title.y = element_text(color = "black", size = 13, angle=90),
+      panel.grid   = element_blank(), axis.line = element_blank(), axis.ticks = element_blank(),
+      axis.text.x  = element_blank(), axis.title.y = element_text(color = "black", size = 13, angle=90),
       axis.text.y  = element_text(color = "black", size = 12),
-      plot.margin  = margin(t = 0, r = 5, b = 5, l = 5, unit = "pt")
+      plot.margin  = ggplot2::margin(t = 0, r = 5, b = 5, l = 5, unit = "pt")
     )
 }
 
-# 4. Helper function: Plot the main KM curve
-plot_km_curve <- function(df, title) {
+plot_km_curve <- function(df) {
   ggplot(df, aes(x = time, y = cum_inc, color = trt_label)) +
     geom_step(linewidth = 1) +
     geom_vline(xintercept = 30, linetype = "dashed", color = "gray60", linewidth = 0.8) +
     scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-                       limits = c(0, 0.15), breaks = seq(0, 0.15, 0.05)) +
-    scale_color_manual(values = trt_colors_km) +
-    labs(title = title, x = "Days since time zero\n", y = "Unadjusted Cumulative Incidence (%)") +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.15), breaks = seq(0, 0.15, 0.05)) +
+    scale_color_manual(values = trt_colors_km) + 
+    labs(title = NULL, x = "Days since time zero\n", y = "Unadjusted Cumulative Incidence (%)") +
     theme_minimal(base_size = 14) +
     theme(
-      panel.grid.minor  = element_blank(),
-      axis.line         = element_line(color = "black"),
-      axis.ticks        = element_line(color = "black", linewidth = 0.8),
-      axis.ticks.length = unit(0.2, "cm"),
-      axis.text         = element_text(color = "black", size = 13),
-      legend.position   = "none", # Legend will be handled by patchwork
-      plot.margin       = margin(t = 10, r = 5, b = 0, l = 5, unit = "pt")
+      panel.grid.minor  = element_blank(), axis.line = element_line(color = "black"),
+      axis.ticks        = element_line(color = "black", linewidth = 0.8), axis.ticks.length = unit(0.2, "cm"),
+      axis.text         = element_text(color = "black", size = 13), legend.position = "none", 
+      plot.margin       = ggplot2::margin(t = 10, r = 5, b = 0, l = 5, unit = "pt") 
     )
 }
 
-# 5. Generate data, curves, and tables for both trials
+dat_tr2_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
+dat_tr3_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
+
 df_km_tr2 <- build_km_df(dat_tr2_all$data_weights)
 df_km_tr3 <- build_km_df(dat_tr3_all$data_weights)
 
-p_km_tr2  <- plot_km_curve(df_km_tr2, "A. Methadone interruption of 3-4 days")
+# Only pass the DF, no titles
+p_km_tr2  <- plot_km_curve(df_km_tr2)
 p_tab_tr2 <- build_event_table(dat_tr2_all$data_weights)
 
-p_km_tr3  <- plot_km_curve(df_km_tr3, "B. Methadone interruption of 5-14 days")
+p_km_tr3  <- plot_km_curve(df_km_tr3)
 p_tab_tr3 <- build_event_table(dat_tr3_all$data_weights)
 
-# 6. Extract legend from one of the plots to place at the very bottom
-dummy_plot <- p_km_tr2 + 
-  theme(legend.position = "bottom", legend.title = element_blank(), 
-        legend.text = element_text(size = 13), legend.key.width = unit(2, "cm"))
+dummy_plot <- p_km_tr2 + theme(legend.position = "bottom", legend.title = element_blank(), legend.text = element_text(size = 13), legend.key.width = unit(2, "cm"))
 shared_legend <- cowplot::get_legend(dummy_plot)
 
-# 7. Assemble the vertical layout using Patchwork (FLATTENED)
-# Heights adjusted to 1.2 for the tables to accommodate the new At-Risk row
-final_km_composite <- p_km_tr2 / 
-  p_tab_tr2 / 
-  plot_spacer() / 
-  p_km_tr3 / 
-  p_tab_tr3 / 
-  shared_legend +
-  plot_layout(heights = c(5, 1.2, 0.5, 5, 1.2, 0.5)) 
-
-# 8. Save output
-jpeg(paste0(RES_DIR, "Figures/June09/eFigure4_Unadjusted_OD_KM_Vertical.jpg"), 
-     width = 3200, height = 4000, res = 300)
-print(final_km_composite)
+# SAVE TRIAL 2 OVERDOSE
+tr2_km_od_composite <- p_km_tr2 / p_tab_tr2 / shared_legend + plot_layout(heights = c(5, 1.2, 0.5)) 
+jpeg(paste0(RES_DIR, "Figures/June09/eFigure4_Unadjusted_OD_KM_TR2.jpg"), width = 3200, height = 2200, res = 300)
+print(tr2_km_od_composite)
 dev.off()
 
-
+# SAVE TRIAL 3 OVERDOSE
+tr3_km_od_composite <- p_km_tr3 / p_tab_tr3 / shared_legend + plot_layout(heights = c(5, 1.2, 0.5)) 
+jpeg(paste0(RES_DIR, "Figures/June09/eFigure4_Unadjusted_OD_KM_TR3.jpg"), width = 3200, height = 2200, res = 300)
+print(tr3_km_od_composite)
+dev.off()
 
 # DISCONT ##########
 library(tidyverse)
@@ -281,7 +246,7 @@ plot_km_curve_discont <- function(df) {
   ggplot(df, aes(x = time, y = cum_inc, color = trt_label)) +
     geom_step(linewidth = 1) +
     scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.8)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
     scale_color_manual(values = trt_colors_km_discont) + 
     labs(
       title = NULL, 
