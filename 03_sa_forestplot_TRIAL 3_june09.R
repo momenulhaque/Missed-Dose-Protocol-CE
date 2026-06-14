@@ -23,14 +23,14 @@ sa_manifest_od <- tibble::tribble(
   
   "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat_od.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
   
-  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+#  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
   
-  "5. Outcome definition", "Overdose-related acute\ncare visits or death", "standard", "Sensitivities/Risk/risk_tr3_514d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr3_514d_SA16_Composite_OD.rds",
-  "5. Outcome definition", "All-cause acute\ncare visits", "standard", "Sensitivities/Risk/risk_tr3_514d_all_acute.rds", "PScore/ps_weight_tr3_all.rds",
+  "4. Outcome definition", "Overdose-related acute\ncare visits or death", "standard", "Sensitivities/Risk/risk_tr3_514d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr3_514d_SA16_Composite_OD.rds",
+  "4. Outcome definition", "All-cause acute\ncare visits", "standard", "Sensitivities/Risk/risk_tr3_514d_all_acute.rds", "PScore/ps_weight_tr3_all.rds",
   
-  "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
-  "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
-  "6. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
+  "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
+  "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
+  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
 )
 
 sa_manifest_dis <- tibble::tribble(
@@ -51,13 +51,13 @@ sa_manifest_dis <- tibble::tribble(
   
   "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat_dis.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
   
-  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+#  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
   
-  "5. Outcome definition", "No dispensation of OAT\nfor 30 consecutive days", "standard", "Sensitivities/Risk/risk_tr3_514d_discont30.rds", "Sensitivities/ps_weight_tr3_514d_discont30.rds",
+  "4. Outcome definition", "No dispensation of OAT\nfor 30 consecutive days", "standard", "Sensitivities/Risk/risk_tr3_514d_discont30.rds", "Sensitivities/ps_weight_tr3_514d_discont30.rds",
   
-  "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
-  "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
-  "6. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
+  "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
+  "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
+  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
 )
 
 trt_clean <- c(
@@ -273,7 +273,7 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_OD.jpg"), width = 3550, height = 5450, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_OD.jpg"), width = 3550, height = 5300, res = 300)
 p_od
 dev.off()
 
@@ -319,6 +319,6 @@ for(i in 1:nrow(plot_data_dis)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_DIS.jpg"), width = 3550, height = 5150, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_DIS.jpg"), width = 3550, height = 5000, res = 300)
 p_dis
 dev.off()

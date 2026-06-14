@@ -279,7 +279,7 @@ for(i in 1:nrow(plot_data_od)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3500, height = 5400, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3500, height = 5300, res = 300)
 p_od
 dev.off()
 
@@ -327,6 +327,6 @@ for(i in 1:nrow(plot_data_dis)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3500, height = 5200, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3500, height = 5100, res = 300)
 p_dis
 dev.off()
