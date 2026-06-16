@@ -56,8 +56,8 @@ dat_tr3_first <- raw_all |>
 
 # Combine datasets and define clinical epochs & 5-category details
 df_explore_first <- bind_rows(
-  dat_tr2_first %>% mutate(Trial = "Methadone interruption of 3-4 days"),
-  dat_tr3_first %>% mutate(Trial = "Methadone interruption of 5-14 days")
+  dat_tr2_first %>% mutate(Trial = "Interruption of 3-4 days"),
+  dat_tr3_first %>% mutate(Trial = "Interruption of 5-14 days")
 ) %>%
   mutate(
     # Create the categorical epochs (keeping all data)
@@ -92,26 +92,25 @@ df_explore_first <- bind_rows(
 
 
 
+## A. TIMING OF FIRST INTERRUPTION (ECDF) WITH ALIGNED TABLE ######
 
-## A. TIMING OF FIRST INTERRUPTION (ECDF) ######
-
-plot_ecdf_first <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) +
+# 1. Create the base ECDF plot (Removing the x-axis title so it can move to the bottom table)
+plot_ecdf_base <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) +
   stat_ecdf(geom = "step", size = 1.2, pad = FALSE) +
   
-  # Clinical anchor lines for the new bins
+  # Clinical anchor lines
   geom_vline(xintercept = c(15, 30, 60, 120), linetype = "dashed", color = "gray60", alpha = 0.6) +
   
-  # Use coord_cartesian to zoom WITHOUT dropping data for the stat_ecdf calculation
   coord_cartesian(xlim = c(0, 180)) +
   scale_x_continuous(breaks = c(0, 15, 30, 60, 120, 180)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(0, 1, 0.25)) +
-  scale_color_manual(values = c("Methadone interruption of 3-4 days" = "#1f78b4", 
-                                "Methadone interruption of 5-14 days" = "#33a02c")) +
+  scale_color_manual(values = c("Interruption of 3-4 days" = "#1f78b4", 
+                                "Interruption of 5-14 days" = "#33a02c")) +
   
   labs(
     title = NULL,
-    x = "Days from OAT initiation to interruption",
-    y = "Cumulative proportion of interruptions (%)"
+    x = NULL, # X-axis title removed here, will be added below the table
+    y = "Cumulative proportion\nof interruptions (%)" # Added newline to prevent squeezing
   ) +
   
   theme_minimal(base_size = 14) +
@@ -123,22 +122,68 @@ plot_ecdf_first <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) 
     axis.ticks.x      = element_line(linewidth = 1.2, color = "black"),
     axis.text.x       = element_text(color = "black", size = 14),
     axis.text.y       = element_text(color = "black", size = 14),
-    axis.title.y      = element_text(size = 14),
-    legend.position   = c(0.75, 0.2), 
+    axis.title.y      = element_text(size = 14, margin = ggplot2::margin(r = 10)),
+    legend.position   = c(0.75, 0.25), 
     legend.title      = element_blank(),
     legend.text       = element_text(size = 14, color = "black"),
     legend.background = element_rect(fill = "white", color = "black"),
-    legend.key        = element_blank(),
-    strip.background  = element_rect(fill = "lightgray", color = NA),
-    strip.text        = element_text(face = "bold", size = 13)
+    legend.key        = element_blank()
   )
 
-jpeg(paste0(RES_DIR, "Figures/June09/eFigure 3A Timing_of_interruptions_ECDF_v1.jpg"), 
-     width = 3800, height = 2500, res = 400)
-print(plot_ecdf_first)
+# 2. Prepare the data for the interval table
+df_table_text <- df_explore_first %>%
+  group_by(Trial) %>%
+  mutate(Total_N = n()) %>% # Calculate using the full 365-day denominator
+  group_by(Trial, ret_length_cat) %>%
+  summarise(
+    prop = n() / first(Total_N),
+    lbl = scales::percent(prop, accuracy = 1),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    # Set the x-coordinates to the midpoint of each vertical line bin
+    x_pos = case_when(
+      ret_length_cat == "\u2264 15 days" ~ 7.5,
+      ret_length_cat == "16-30 days" ~ 22.5,
+      ret_length_cat == "31-60 days" ~ 45,
+      ret_length_cat == "61-120 days" ~ 90,
+      ret_length_cat == "121-180 days" ~ 150,
+      TRUE ~ NA_real_
+    )
+  ) %>%
+  filter(!is.na(x_pos)) # Drop the >180 bin so it doesn't plot off-screen
+
+# 3. Create the text-only table plot
+plot_table <- ggplot(df_table_text, aes(x = x_pos, y = fct_rev(Trial), label = lbl, color = Trial)) +
+  geom_text(size = 4.5, fontface = "bold") +
+  
+  # Ensure the x-axis limits exactly match the ECDF plot for perfect alignment
+  coord_cartesian(xlim = c(0, 180)) +
+  scale_color_manual(values = c("Interruption of 3-4 days" = "#1f78b4", 
+                                "Interruption of 5-14 days" = "#33a02c")) +
+  
+  labs(x = "Days from OAT initiation to interruption", y = NULL) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid      = element_blank(),
+    axis.line       = element_blank(),
+    axis.text.x     = element_blank(),
+    axis.ticks      = element_blank(),
+    axis.title.x    = element_text(margin = ggplot2::margin(t = 15)),
+    # Right-align the trial names so they look like table row headers
+    axis.text.y     = element_text(color = "black", size = 12, hjust = 1), 
+    legend.position = "none"
+  )
+
+# 4. Stitch them together using patchwork
+# The heights argument ensures the graph is taller than the table row
+plot_ecdf_combined <- plot_ecdf_base / plot_table + 
+  plot_layout(heights = c(4, 1)) 
+
+jpeg(paste0(RES_DIR, "Figures/June09/eFigure 3A Timing_of_interruptions_ECDF_with_Table.jpg"), 
+     width = 3800, height = 2800, res = 400) # Slightly increased height to fit the table
+print(plot_ecdf_combined)
 dev.off()
-
-
 
 
 ## B. DOSE ADJUSTMENT PROPORTIONS (BAR CHART) ######
