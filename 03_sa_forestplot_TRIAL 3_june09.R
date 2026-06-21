@@ -57,7 +57,8 @@ sa_manifest_dis <- tibble::tribble(
   
   "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
   "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
-  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
+  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds",
+  "5. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr3_514d_rmst_cl.rds", "PScore/ps_weight_tr3_all_cl.rds"
 )
 
 trt_clean <- c(
@@ -273,7 +274,7 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_OD.jpg"), width = 3550, height = 5300, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_OD.jpg"), width = 3550, height = 5400, res = 300)
 p_od
 dev.off()
 
@@ -319,6 +320,6 @@ for(i in 1:nrow(plot_data_dis)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_DIS.jpg"), width = 3550, height = 5000, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_DIS.jpg"), width = 3550, height = 5100, res = 300)
 p_dis
 dev.off()

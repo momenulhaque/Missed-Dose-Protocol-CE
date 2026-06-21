@@ -6,8 +6,6 @@ options compress=y;
 libname der "W:\SUD\Data\2022\derived";
 libname lib "W:\SUD\Data\2022\SAS data";
 libname pss "W:\SUD\Data\2022\derived\PSS";
-libname tmplib "E:\SAS Data\Missed dose protocol";
-libname tmplib1 "E:\SAS Data\Missed dose protocol_v1";
 libname tmplib2 "E:\SAS Data\Missed dose protocol_v2";
 
 *oat episode;
@@ -968,4 +966,16 @@ set tmplib1.TT_analytic_prev_sens_m;
 if episode = 1;
 run;
 
+
+
+
  
+proc sql;
+create table tmplib2.TT_analytic_prev_cl_sens_nw_m as
+select a.*, b.com, b.comsize, b.n_pracs, b.n_pats 
+from tmplib2.TT_analytic_prev_sens_nw_m a left join der.prov_clinics_v2 b
+on year(a.time0)=b.year and month(a.time0)=b.month and a.prac_studyid_rev=b.prac_studyid_rev
+order by a.studyid_rev, a.time0;
+quit; 
+
+

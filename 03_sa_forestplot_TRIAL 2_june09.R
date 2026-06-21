@@ -28,7 +28,8 @@ sa_manifest_od <- tibble::tribble(
   
   "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_hdPS_34d.rds", "PScore/ps_weight_34d_hdPS.rds",
   "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_hdPS_ML_34d.rds", "PScore/ps_weight_34d_hdPS_ML.rds",
-  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr2_34d.rds", "PScore/ps_weight_tr2_34d_all.rds"
+  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr2_34d.rds", "PScore/ps_weight_tr2_34d_all.rds",
+  "5. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr2_34d_rmst_cl.rds", "PScore/ps_weight_tr2_34d_all_cl.rds"
 )
 
 sa_manifest_dis <- tibble::tribble(
@@ -56,7 +57,8 @@ sa_manifest_dis <- tibble::tribble(
   
   "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_hdPS_34d.rds", "PScore/ps_weight_34d_hdPS.rds",
   "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_hdPS_ML_34d.rds", "PScore/ps_weight_34d_hdPS_ML.rds",
-  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr2_34d.rds", "PScore/ps_weight_tr2_34d_all.rds"
+  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr2_34d.rds", "PScore/ps_weight_tr2_34d_all.rds",
+  "5. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr2_34d_rmst_cl.rds", "PScore/ps_weight_tr2_34d_all_cl.rds"
 )
 
 trt_clean <- c(
@@ -153,7 +155,7 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
     left_join(counts, by = "trt") %>% 
     left_join(abs_data, by = "trt") %>%
     left_join(rd_data, by = "trt") %>%
-    mutate(rd_disp = ifelse(trt == "no reversion", "Ref.", rd_disp))
+    mutate(rd_disp = ifelse(trt == "no reversion", "Reference", rd_disp))
 }
 
 # 3. BUILD WIDE DATASET (WITH HEADERS & INDENTATION) ---------------------------
@@ -279,7 +281,7 @@ for(i in 1:nrow(plot_data_od)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3500, height = 5300, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_OD.jpg"), width = 3500, height = 5400, res = 300)
 p_od
 dev.off()
 
@@ -327,6 +329,6 @@ for(i in 1:nrow(plot_data_dis)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3500, height = 5100, res = 300)
+jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR2_DIS.jpg"), width = 3500, height = 5200, res = 300)
 p_dis
 dev.off()

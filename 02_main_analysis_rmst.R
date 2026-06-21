@@ -132,7 +132,7 @@ dat_tr3_all <- raw_all |>
 rm(raw_all); gc()
 
 
-
+View(dat_tr2_all)
 # 2. PROPENSITY SCORE WEIGHTS ################
 
 ## MET 3-4 days: first-interruption-in-first-episode #####
