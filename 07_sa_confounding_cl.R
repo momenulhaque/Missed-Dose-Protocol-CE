@@ -100,7 +100,8 @@ dat_tr3_all <- raw_all |>
   filter(trial_cat == "5-14") |>
   clean_trt_all() 
 
-
+dat_tr2_all %>% count(com)
+dat_tr3_all %>% count(com)
 names(dat_tr3_all)
 
 cor(dat_tr3_all[, c("comsize", "n_pracs", "n_pats")])

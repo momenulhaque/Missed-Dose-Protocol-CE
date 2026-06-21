@@ -1,0 +1,11 @@
+trial,label,n_clusters,tau2,MOR,ICC,interpretation
+Trial 2 (3-4 days),Trial 2 (3-4 days) | Trt selection: 1-<50% vs no change,336,0.01,1.098,0.003,Negligible clustering
+Trial 2 (3-4 days),Trial 2 (3-4 days) | Trt selection: >=50%/<=40mg vs no change,329,0,1,0,Negligible clustering
+Trial 2 (3-4 days),Trial 2 (3-4 days) | Trt selection: increase vs no change,336,0.03,1.179,0.009,Modest clustering
+Trial 2 (3-4 days),Trial 2 (3-4 days) | Outcome: OAT discontinuation,348,0.026,1.165,0.008,Modest clustering
+Trial 2 (3-4 days),Trial 2 (3-4 days) | Outcome: Overdose acute care,348,0.163,1.47,0.047,Modest clustering
+Trial 3 (5-14 days),Trial 3 (5-14 days) | Trt selection: 1-<50% vs no change,361,0.053,1.246,0.016,Modest clustering
+Trial 3 (5-14 days),Trial 3 (5-14 days) | Trt selection: >=50%/<=40mg vs no change,354,0.077,1.303,0.023,Modest clustering
+Trial 3 (5-14 days),Trial 3 (5-14 days) | Trt selection: increase vs no change,361,0.135,1.419,0.039,Modest clustering
+Trial 3 (5-14 days),Trial 3 (5-14 days) | Outcome: OAT discontinuation,372,0.034,1.191,0.01,Modest clustering
+Trial 3 (5-14 days),Trial 3 (5-14 days) | Outcome: Overdose acute care,372,0.127,1.405,0.037,Modest clustering
