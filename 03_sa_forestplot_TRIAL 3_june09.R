@@ -153,7 +153,7 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
     left_join(counts, by = "trt") %>% 
     left_join(abs_data, by = "trt") %>%
     left_join(rd_data, by = "trt") %>%
-    mutate(rd_disp = ifelse(trt == "no reversion", "Ref.", rd_disp))
+    mutate(rd_disp = ifelse(trt == "no reversion", "Reference", rd_disp))
 }
 
 # 3. BUILD WIDE DATASET (WITH HEADERS & INDENTATION) ---------------------------
