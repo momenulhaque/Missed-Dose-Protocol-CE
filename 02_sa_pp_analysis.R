@@ -188,7 +188,7 @@ risk_pp$tr2$dis$ci <- predict_cuminc_rmst(
   ref_group = "no reversion", wt_type = "wt_pp_dis"
 )
 
-saveRDS(risk_pp$tr2, paste0(RES_DIR, "risk_tr2_34d_per_protocol.rds"))
+saveRDS(risk_pp$tr2, paste0(RES_DIR, "risk/risk_tr2_34d_per_protocol.rds"))
 
 
 # ── 5. EXECUTION FOR TRIAL 3 (5-14 DAYS) ──────────────────────────────────────
@@ -239,6 +239,6 @@ risk_pp$tr3$dis$ci <- predict_cuminc_rmst(
   ref_group = "no reversion", wt_type = "wt_pp_dis"
 )
 
-saveRDS(risk_pp$tr3, paste0(RES_DIR, "risk_tr3_514d_per_protocol.rds"))
+saveRDS(risk_pp$tr3, paste0(RES_DIR, "risk/risk_tr3_514d_per_protocol.rds"))
 
 cat("\n✓ Per-Protocol Analysis Complete. Results saved.\n")
