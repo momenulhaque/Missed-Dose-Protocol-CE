@@ -805,7 +805,7 @@ dev.off()
 
 
 
-#8. PS MIRROR PLOT ########
+# 8. PS MIRROR PLOT ########
 
 
 library(tidyverse)
@@ -843,8 +843,8 @@ build_mirror_ess_plot <- function(ps_obj) {
     ) %>%
     mutate(
       label_text = paste0("Original N = ", formatC(raw_n, format="f", digits=0, big.mark=","),
-                          "\nTruncated ESS = ", formatC(ess, format="f", digits=0, big.mark=","),
-                          "\nOW ESS = ", formatC(ess_ow, format="f", digits=0, big.mark=","))
+                          "\nIPTW-ESS = ", formatC(ess, format="f", digits=0, big.mark=","),
+                          "\nOW-ESS = ", formatC(ess_ow, format="f", digits=0, big.mark=","))
     )
   
   # Build Plot
@@ -876,7 +876,7 @@ build_mirror_ess_plot <- function(ps_obj) {
       subtitle = NULL,
       x = "Estimated Propensity Score",
       y = "Count / Weighted Count",
-      caption = "Note: Top (Grey) represents the unweighted sample size. Bottom (Colored) represents the weighted pseudo-population using truncated IPTW."
+      caption = "Note: Top (Grey) represents the unweighted sample.\nBottom (Colored) represents the population after using inverse propbability of treatment weight (IPTW).\nOW-ESS, effective sample size under overlap weights.\nIPTW-ESS, effective sample size under IPTW"
     ) +
     
     theme_minimal(base_size = 14) +
@@ -918,8 +918,6 @@ jpeg(paste0(RES_DIR, "Figures/June09/Diagnostic_TR3_Mirrored_with_ESS.jpg"),
      width = 3600, height = 2600, res = 300)
 print(p_tr3)
 dev.off()
-
-
 
 
 

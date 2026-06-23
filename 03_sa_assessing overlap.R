@@ -1,4 +1,4 @@
-# PS MIRROR PLOT ########
+# 1. PS MIRROR PLOT ########
 
 
 library(tidyverse)
@@ -116,7 +116,7 @@ dev.off()
 
 
 
-# PS OVERLAP PLOT ###########
+# 2. PS OVERLAP PLOT ###########
 library(tidyverse)
 library(nnet)
 
@@ -237,3 +237,93 @@ jpeg(paste0(RES_DIR, "Figures/June09/Diagnostic_TR3_Pairwise_Overlap_Aligned.jpg
      width = 3800, height = 2000, res = 300)
 print(p_pair_tr3)
 dev.off()
+
+
+
+# 3. PS plots ############
+
+library(tidyverse)
+library(nnet)
+
+# 1. Define colors
+COMPARISON_COLORS <- c(
+  "No dose change"       = "#000000",
+  "Dose increase"        = "#D62728",
+  "<50% reduction"       = "#2CA02C",
+  "≥50% reduction/≤40mg" = "#FF7F0E"
+)
+
+# 2. Load PS model objects
+ps_tr2_all <- readRDS(paste0(RES_DIR, "PScore/ps_weight_tr2_34d_all.rds"))$data_weights
+ps_tr3_all <- readRDS(paste0(RES_DIR, "PScore/ps_weight_tr3_all.rds"))$data_weights
+
+# 3. Recode and label
+recode_ps <- function(dat, trial_label) {
+  dat %>%
+    mutate(
+      group = recode(trt,
+                     "no reversion" = "No dose change",
+                     "1-<50%"       = "<50% reduction",
+                     ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                     "increase"     = "Dose increase"
+      ),
+      group = factor(group, levels = c(
+        "No dose change", "<50% reduction",
+        "≥50% reduction/≤40mg", "Dose increase"
+      )),
+      Trial = trial_label
+    ) %>%
+    select(group, ps, Trial)
+}
+
+tr2 <- recode_ps(ps_tr2_all, "Methadone interruption of 3-4 days")
+tr3 <- recode_ps(ps_tr3_all, "Methadone interruption of 5-14 days")
+dat_all <- bind_rows(tr2, tr3)
+
+# 4. Plot function
+ps_score_plot_c3 <- function(dat,
+                             x_lab = "Propensity Score",
+                             y_lab = "Density",
+                             legend_position = c(0.02, 0.02),
+                             legend_justification = c(0, 0),
+                             x_points = c(0, .25, .5, .75, 1)) {
+  ggplot(dat, aes(x = ps, colour = group, fill = group)) +
+    geom_histogram(aes(y = after_stat(density)),
+                   position = "identity", alpha = 0.2, bins = 30) +
+    geom_density(alpha = 0.05, linewidth = 0.5) +
+    scale_colour_manual(values = COMPARISON_COLORS) +
+    scale_fill_manual(values = COMPARISON_COLORS) +
+    facet_wrap(~Trial, nrow = 2, scales = "free") +
+    labs(title = NULL, x = x_lab, y = y_lab) +
+    scale_x_continuous(breaks = x_points) +
+    theme_minimal(base_size = 13) +
+    theme(
+      title            = element_text(color = "black", size = 14),
+      panel.grid       = element_blank(),
+      axis.line        = element_line(color = "black"),
+      axis.ticks.length = unit(0.2, "cm"),
+      axis.ticks.y     = element_line(linewidth = 1.2, color = "black"),
+      axis.ticks.x     = element_line(linewidth = 1.2, color = "black"),
+      axis.text        = element_text(color = "black", size = 14),
+      axis.title.y     = element_text(size = 14),
+      legend.position      = legend_position,
+      legend.justification = legend_justification,
+      legend.direction     = "horizontal",
+      legend.title         = element_blank(),
+      legend.text          = element_text(size = 14, color = "black"),
+      legend.background    = element_rect(fill = "white", color = "black"),
+      legend.key           = element_blank(),
+      strip.background     = element_rect(fill = "lightgray", color = NA),
+      strip.text           = element_text(face = "bold", size = 13)
+    )
+}
+
+# 5. Generate and save
+plot2 <- ps_score_plot_c3(dat_all, legend_position = "bottom") +
+  guides(color = guide_legend(nrow = 1))
+
+jpeg(paste0(RES_DIR, "Figures/June09/PS_plots.jpg"),
+     width = 2600, height = 2500, res = 300)
+print(plot2)
+dev.off()
+
