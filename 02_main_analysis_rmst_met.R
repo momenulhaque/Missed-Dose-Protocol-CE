@@ -14,7 +14,7 @@ source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")   # ps_model_wt(), pr
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
 dir.create(paste0(RES_DIR, "PScore"),   showWarnings = FALSE)
 dir.create(paste0(RES_DIR, "Risk"),     showWarnings = FALSE)
 dir.create(paste0(RES_DIR, "Tables"),   showWarnings = FALSE)
