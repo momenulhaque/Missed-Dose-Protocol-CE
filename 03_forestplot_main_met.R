@@ -11,7 +11,7 @@ library(tidyverse)
 
 
 
-RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
 
 # UNIFIED EXTRACTION: Absolute Risk and Risk Difference at time t
 

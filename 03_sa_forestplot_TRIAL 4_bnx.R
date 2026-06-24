@@ -3,68 +3,72 @@ library(forestploter)
 library(grid)
 
 # 1. SETUP & MASTER MANIFEST ---------------------------------------------------
-RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/BNX/"
 
 sa_manifest_od <- tibble::tribble(
   ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
-  "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
-  "1. Sample restriction", "First interruption in\nfirst episode", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
-  "1. Sample restriction", "Any interruption in\nany episode", "standard", "Sensitivities/Risk/risk_tr3_514d_sa2.rds", "Sensitivities/ps_weight_tr3_514d_sa2.rds",
-  "1. Sample restriction", "People who completed\ninduction", "standard", "Sensitivities/Risk/risk_tr3_514d_SA02_Induction.rds", "Sensitivities/ps_wt_tr3_514d_SA02_Induction.rds",
-  "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr3_514d_SA03_Dose_LT80.rds",
-  "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr3_514d_SA04_Dose_GE80.rds",
-  "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr3_514d_SA05_Ret_LE30.rds",
-  "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr3_514d_SA06_Ret_GT30.rds",
-  "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr3_514d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr3_514d_SA09_HighFentArea.rds",
-  "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr3_514d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr3_514d_SA11_CumOAT_GE1yr.rds",
-  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr3_514d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr3_514d_SA13_30dWashout.rds",    
+  "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr4_rmst.rds", "PScore/ps_weight_tr4_all.rds",
+  "1. Sample restriction", "First interruption in\nfirst episode", "primary_first", "Risk/risk_tr4_rmst.rds", "PScore/ps_weight_tr4_first.rds",
+  "1. Sample restriction", "People who completed\ninduction", "standard", "Sensitivities/Risk/risk_tr4_SA02_Induction.rds", "Sensitivities/ps_wt_tr4_SA02_Induction.rds",
+  "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr4_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr4_SA03_Dose_LT80.rds",
+  "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr4_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr4_SA04_Dose_GE80.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr4_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr4_SA05_Ret_LE30.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr4_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr4_SA06_Ret_GT30.rds",
+  "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr4_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr4_SA09_HighFentArea.rds",
+  "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr4_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr4_SA11_CumOAT_GE1yr.rds",
+  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr4_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr4_SA13_30dWashout.rds",
+
+  "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr4_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr4_SA10_PostFentEra.rds",
   
-  "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr3_514d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr3_514d_SA10_PostFentEra.rds",
+  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr4_5cat_od.rds", "Sensitivities/ps_weight_tr4_5cat.rds",
   
-  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat_od.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
+  "4. Outcome definition", "Overdose-related acute\ncare visits or death", "standard", "Sensitivities/Risk/risk_tr4_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr4_SA16_Composite_OD.rds",
+  "4. Outcome definition", "All-cause acute\ncare visits", "standard", "Sensitivities/Risk/risk_tr4_all_acute.rds", "PScore/ps_weight_tr4_all.rds",
   
-#  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+  "5. Causal contrast", "Censoring at subsequent\ninterruption of >2 days", "standard", "Sensitivities/Risk/risk_tr4_per_protocol.rds", "PScore/ps_weight_tr4_hdPS.rds",
   
-  "4. Outcome definition", "Overdose-related acute\ncare visits or death", "standard", "Sensitivities/Risk/risk_tr3_514d_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr3_514d_SA16_Composite_OD.rds",
-  "4. Outcome definition", "All-cause acute\ncare visits", "standard", "Sensitivities/Risk/risk_tr3_514d_all_acute.rds", "PScore/ps_weight_tr3_all.rds",
+  "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr4_hdPS.rds", "PScore/ps_weight_tr4_hdPS.rds",  
+  "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr4_hdPS_ML.rds", "PScore/ps_weight_tr4_hdPS_ML.rds",
+  "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr4_rmst_ow.rds", "PScore/ps_weight_tr4_all.rds",
+  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr4_rmst_cl.rds", "PScore/ps_weight_tr4_all_cl.rds"
   
-  "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
-  "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
-  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds"
 )
 
 sa_manifest_dis <- tibble::tribble(
   ~category, ~sa_label, ~obj_type, ~risk_file, ~ps_file,
-  "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_all.rds",
-  "1. Sample restriction", "First interruption in\nfirst episode", "primary_first", "Risk/risk_tr3_514d_rmst.rds", "PScore/ps_weight_tr3_first.rds",
-  "1. Sample restriction", "Any interruption in\nany episode", "standard", "Sensitivities/Risk/risk_tr3_514d_sa2.rds", "Sensitivities/ps_weight_tr3_514d_sa2.rds",
-  "1. Sample restriction", "People who completed\ninduction", "standard", "Sensitivities/Risk/risk_tr3_514d_SA02_Induction.rds", "Sensitivities/ps_wt_tr3_514d_SA02_Induction.rds",
-  "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr3_514d_SA03_Dose_LT80.rds",
-  "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr3_514d_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr3_514d_SA04_Dose_GE80.rds",
-  "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr3_514d_SA05_Ret_LE30.rds",
-  "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr3_514d_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr3_514d_SA06_Ret_GT30.rds",
-  "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr3_514d_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr3_514d_SA09_HighFentArea.rds",
-  "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr3_514d_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr3_514d_SA11_CumOAT_GE1yr.rds",
-  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr3_514d_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr3_514d_SA13_30dWashout.rds",    
+  "0. Primary Analysis", "First interruption in\nany episode", "primary_all", "Risk/risk_tr4_rmst.rds", "PScore/ps_weight_tr4_all.rds",
+  "1. Sample restriction", "First interruption in\nfirst episode", "primary_first", "Risk/risk_tr4_rmst.rds", "PScore/ps_weight_tr4_first.rds",
+  "1. Sample restriction", "People who completed\ninduction", "standard", "Sensitivities/Risk/risk_tr4_SA02_Induction.rds", "Sensitivities/ps_wt_tr4_SA02_Induction.rds",
+  "1. Sample restriction", "Missed at <80mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr4_SA03_Dose_LT80.rds", "Sensitivities/ps_wt_tr4_SA03_Dose_LT80.rds",
+  "1. Sample restriction", "Missed at \u226580mg\nof methadone", "standard", "Sensitivities/Risk/risk_tr4_SA04_Dose_GE80.rds", "Sensitivities/ps_wt_tr4_SA04_Dose_GE80.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n\u226430 days", "standard", "Sensitivities/Risk/risk_tr4_SA05_Ret_LE30.rds", "Sensitivities/ps_wt_tr4_SA05_Ret_LE30.rds",
+  "1. Sample restriction", "Days since OAT initiation:\n>30 days", "standard", "Sensitivities/Risk/risk_tr4_SA06_Ret_GT30.rds", "Sensitivities/ps_wt_tr4_SA06_Ret_GT30.rds",
+  "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr4_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr4_SA09_HighFentArea.rds",
+  "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr4_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr4_SA11_CumOAT_GE1yr.rds",
+  "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr4_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr4_SA13_30dWashout.rds",    
+
   
-  "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr3_514d_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr3_514d_SA10_PostFentEra.rds",
+  "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr4_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr4_SA10_PostFentEra.rds",
   
-  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr3_514d_5cat_dis.rds", "Sensitivities/ps_weight_tr3_514d_5cat.rds",
+  "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr4_5cat_dis.rds", "Sensitivities/ps_weight_tr4_5cat.rds",
   
-#  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr3_514d_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr3_514d_SA12_NoTruncation.rds",
+  #  "4. Follow-up", "No truncation of follow-up\nat 12 months", "standard", "Sensitivities/Risk/risk_tr4_SA12_NoTruncation.rds", "Sensitivities/ps_wt_tr4_SA12_NoTruncation.rds",
   
-  "4. Outcome definition", "No dispensation of OAT\nfor 30 consecutive days", "standard", "Sensitivities/Risk/risk_tr3_514d_discont30.rds", "Sensitivities/ps_weight_tr3_514d_discont30.rds",
+  "4. Outcome definition", "No dispensation of OAT\nfor 30 consecutive days", "standard", "Sensitivities/Risk/risk_tr4_discont30.rds", "Sensitivities/ps_weight_tr4_discont30.rds",
   
-  "5. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr3_hdPS_514d.rds", "PScore/ps_weight_514d_hdPS.rds",
-  "5. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr3_hdPS_ML_514d.rds", "PScore/ps_weight_514d_hdPS_ML.rds",
-  "5. Model specification", "Overlap weights\nbased analysis", "ow_all", "Risk/OW/risk_tr3_514d.rds", "PScore/ps_weight_tr3_all.rds",
-  "5. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr3_514d_rmst_cl.rds", "PScore/ps_weight_tr3_all_cl.rds"
+  "5. Causal contrast", "Censoring at subsequent\ninterruption of >2 days", "standard", "Sensitivities/Risk/risk_tr4_per_protocol.rds", "PScore/ps_weight_tr4_hdPS.rds",
+  
+  "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr4_hdPS.rds", "PScore/ps_weight_tr4_hdPS.rds",  
+  "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr4_hdPS_ML.rds", "PScore/ps_weight_tr4_hdPS_ML.rds",
+  "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr4_rmst_ow.rds", "PScore/ps_weight_tr4_all.rds",
+  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr4_rmst_cl.rds", "PScore/ps_weight_tr4_all_cl.rds"
+  
 )
 
 trt_clean <- c(
   "no reversion" = "No dose change", 
   "1-<50%" = "<50% reduction", 
-  ">=50%/<=40mg" = "\u226550% reduction/\u226440mg", 
+  ">=50%/<=4mg" = "\u226550% reduction/\u22644mg", 
   "increase" = "Dose increase",
   "increase <50%" = "<50% increase",
   "increase >=50%"  = "\u226550% increase"
@@ -73,7 +77,7 @@ trt_clean <- c(
 trt_colors <- c(
   "No dose change" = "black", 
   "<50% reduction" = "#2CA02C", 
-  "\u226550% reduction/\u226440mg" = "#FF7F0E", 
+  "\u226550% reduction/\u22644mg" = "#FF7F0E", 
   "Dose increase" = "#D62728",
   "<50% increase" = "#9467BD", 
   "\u226550% increase"  = "#A00000"
@@ -87,9 +91,9 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
   
   is_5cat <- grepl("5 category", sa_label)
   local_levels <- if(is_5cat) {
-    c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <50%", "increase >=50%")
+    c("no reversion", "1-<50%", ">=50%/<=4mg", "increase <50%", "increase >=50%")
   } else {
-    c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
+    c("no reversion", "1-<50%", ">=50%/<=4mg", "increase")
   }
   
   na_block <- tibble(trt = local_levels, Episode = NA_character_, abs_risk_disp = "", 
@@ -108,11 +112,13 @@ extract_nested_data <- function(risk_file, ps_file, obj_type, outcome, max_time,
       mutate(trt = as.character(trt), Episode = as.character(Episode))
   }, error = function(e) tibble(trt = local_levels, Episode = NA_character_))
   
+  # --- FIX FOR 5-CATEGORY DISCONTINUATION PLOT ---
   risks_df <- NULL
   contrasts <- NULL
   
   tryCatch({
-    # Smart Node Locator: Dynamically seeks the valid node level to prevent structural mismatches
+    # Smart Node Locator: If the exact 'outcome' name isn't found, 
+    # it safely defaults to the first available node (which fixes the 5cat 'dis' bug)
     if (obj_type %in% c("primary_all", "ow_all")) {
       out_node <- if (!is.null(risk_obj$all[[outcome]])) outcome else names(risk_obj$all)[1]
       base_node <- risk_obj$all[[out_node]]
@@ -187,6 +193,7 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
     mutate(SA_Col = {
       parts <- unlist(strsplit(as.character(SA_Label[1]), "\n"))
       
+      # FIX: Indent the sub-rows by 4 spaces so the Header sits further left
       parts <- paste0("    ", parts) 
       
       out_col <- rep("", n())
@@ -205,6 +212,7 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
     header_row[] <- NA
     header_row$Category <- cat
     
+    # Header receives the category text perfectly flush left (no spaces)
     header_row$SA_Col <- cat           
     
     header_row$Dose_Adj <- ""
@@ -213,6 +221,7 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
     header_row$rd_disp <- ""
     header_row$`Plot_Canvas` <- ""
     
+    # FIX: Shade the header row in a darker, contrasting grey
     header_row$bg_color <- "#E0E0E0"   
     
     header_row$is_header <- TRUE
@@ -236,7 +245,6 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
 
 
 # 4A. PLOT GENERATION: OVERDOSE ------------------------------------------------
-cat("\n--- Generating Overdose Plot (Trial 3) ---\n")
 plot_data_od <- build_wide_df(manifest = sa_manifest_od, outcome = "od", max_time = 30)
 
 bg_fill_od <- plot_data_od$bg_color
@@ -253,7 +261,7 @@ p_od <- forest(
   vert_line = c(-3, -2, -1, 1, 2, 3),
   ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
-  #  title = "Methadone interruption 5-14 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
+  #  title = "Buprenorphine/naloxone interruption 3-5 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
                        vertline_col = "grey50", 
@@ -265,6 +273,7 @@ p_od <- forest(
 )
 
 p_od <- edit_plot(p_od, row = header_idx_od, gp = gpar(fontface = "bold"))
+# FIX: Using proper 'npc' units for center alignment
 p_od <- edit_plot(p_od, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
 p_od <- edit_plot(p_od, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
 
@@ -274,13 +283,13 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_OD.jpg"), width = 3550, height = 5400, res = 300)
+
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR4_OD.jpg"), width = 3500, height = 5700, res = 300)
 p_od
 dev.off()
 
 
 # 4B. PLOT GENERATION: DISCONTINUATION -----------------------------------------
-cat("\n--- Generating Discontinuation Plot (Trial 3) ---\n")
 
 plot_data_dis <- build_wide_df(manifest = sa_manifest_dis, outcome = "dis", max_time = 365) %>%
   filter(!grepl("Composite outcome", `Sensitivity Analysis`))
@@ -299,7 +308,7 @@ p_dis <- forest(
   vert_line = c(-15, -10, -5, 5, 10, 15),
   ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
-  # title = "Methadone interruption 5-14 Days: Adjusted risk differences at 12 Months for OAT discontinuation",
+  # title = "Methadone interruption 3-4 Days: Adjusted risk differences at 12 Months for OAT discontinuation",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
                        vertline_col = "grey50", 
@@ -311,6 +320,7 @@ p_dis <- forest(
 )
 
 p_dis <- edit_plot(p_dis, row = header_idx_dis, gp = gpar(fontface = "bold"))
+# FIX: Using proper 'npc' units for center alignment
 p_dis <- edit_plot(p_dis, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
 p_dis <- edit_plot(p_dis, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
 
@@ -320,6 +330,9 @@ for(i in 1:nrow(plot_data_dis)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/June09/SA_Forest_TR3_DIS.jpg"), width = 3550, height = 5100, res = 300)
+
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR4_DIS.jpg"), width = 3500, height = 5500, res = 300)
 p_dis
 dev.off()
+
+

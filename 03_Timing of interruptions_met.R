@@ -14,7 +14,7 @@ source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
 
 # ── 5-Category Pre-processing ──────────────────────────────────────────────────
 TRT_LEVELS_5 <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase <50%", "increase >=50%")

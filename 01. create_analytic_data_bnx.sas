@@ -7,7 +7,7 @@ libname der "W:\SUD\Data\2022\derived";
 libname lib "W:\SUD\Data\2022\SAS data";
 libname pss "W:\SUD\Data\2022\derived\PSS";
 libname tmplib "E:\SAS Data\Missed dose protocol";
-libname tmplib1 "E:\SAS Data\Missed dose protocol_v1";
+libname tmplib1 "E:\SAS Data\Missed dose protocol_v2";
 
 /*JM2: see my comments starting with "JM2" (Apr 11, 2025)*/
 
@@ -1151,3 +1151,17 @@ proc freq data=tmplib1.TT_analytic_rprev_sens_nw_b;
 proc freq data=tmplib1.TT_analytic_prev_nw_b;
   table trial_cat;
  run;
+
+
+
+
+ 
+ 
+proc sql;
+create table tmplib1.TT_analytic_prev_cl_sens_nw_b as
+select a.*, b.com, b.comsize, b.n_pracs, b.n_pats 
+from tmplib1.TT_analytic_prev_sens_nw_b a left join der.prov_clinics_v2 b
+on year(a.time0)=b.year and month(a.time0)=b.month and a.prac_studyid_rev=b.prac_studyid_rev
+order by a.studyid_rev, a.time0;
+quit; 
+

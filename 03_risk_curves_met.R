@@ -5,7 +5,7 @@ library(patchwork)
 library(cowplot)
 
 ## 1. SETUP & DATA LOADING ------------------------------------------------------
-RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
 
 # Load Risk Objects (Adjusted Curves)
 risk_tr2 <- readRDS(paste0(RES_DIR, "Risk/risk_tr2_34d_rmst.rds"))

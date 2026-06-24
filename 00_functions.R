@@ -24,6 +24,8 @@ library(CFsurvival)
 library(survSuperLearner)
 library(earth)
 library(randomForest)
+library(data.table)
+
 
 ps_model_wt <- function(dat, exposure = "trt", trunc_low = 0.01, trunc_high = 0.99,
                         out_vars, clust_vars,
@@ -753,6 +755,194 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
   return(res)
 }
 
+predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
+                                     cluster_var, samples = 1000, conf_int = TRUE,
+                                     ref_group = "no reversion", wt_type = "ow_wt",
+                                     rmst_tau = 365) {
+  
+  # 1. Fit pooled logistic regression
+  covs1 <- paste0(c(trt_var, "ns(interval, df = 3)", covs), collapse = "+")
+  plr_formula <- as.formula(paste("event ~", covs1))
+  
+  model <- glm(plr_formula, data = Dat_expanded,
+               family = quasibinomial(), weights = Dat_expanded[[wt_type]])
+  
+  V <- sandwich::vcovCL(model, cluster = Dat_expanded[[cluster_var]], type = NULL,
+                        sandwich = TRUE, fix = FALSE)
+  coefs <- coef(model)
+  
+  # 2. Reference group & Factor Level Preservation
+  is_trt_factor <- is.factor(Dat_expanded[[trt_var]])
+  if (is_trt_factor) {
+    trt_levels <- levels(Dat_expanded[[trt_var]])
+  } else {
+    trt_levels <- as.character(unique(Dat_expanded[[trt_var]]))
+  }
+  
+  if (is.null(ref_group)) ref_group <- trt_levels[1]
+  
+  # 3. Pre-compute Design Matrices using data.table for extreme speed
+  dt <- as.data.table(Dat_expanded)
+  setorderv(dt, c(cluster_var, "stop")) 
+  
+  # Build a list of model matrices (one for each treatment level) ONCE.
+  mm_list <- lapply(trt_levels, function(lvl) {
+    dt_temp <- copy(dt)
+    
+    # Explicitly preserve factor levels so we don't trigger the contrasts error
+    if (is_trt_factor) {
+      dt_temp[[trt_var]] <- factor(lvl, levels = trt_levels)
+    } else {
+      dt_temp[[trt_var]] <- lvl
+    }
+    
+    # Use xlev = model$xlevels to strictly enforce the model's known factor levels
+    model.matrix(delete.response(terms(model)), data = dt_temp, xlev = model$xlevels)
+  })
+  names(mm_list) <- trt_levels
+  
+  # 4. Vectorized Risk Function (Runs strictly on pre-computed matrices)
+  fast_risk_fun <- function(coef_draw) {
+    res_list <- vector("list", length(trt_levels))
+    
+    for (i in seq_along(trt_levels)) {
+      lvl <- trt_levels[i]
+      
+      # Matrix multiplication for all observations at once
+      dt[, p_event := plogis(mm_list[[lvl]] %*% coef_draw)]
+      
+      # Fast cumulative product of survival probabilities grouped by cluster
+      dt[, cum_surv := cumprod(1 - p_event), by = cluster_var]
+      
+      # Extract mean risk at exact specified horizons
+      risks_h <- numeric(length(horizons))
+      for (j in seq_along(horizons)) {
+        h <- horizons[j]
+        risk_val <- 1 - dt[stop <= h, .(last_surv = cum_surv[.N]), by = cluster_var][, mean(last_surv)]
+        risks_h[j] <- risk_val
+      }
+      
+      res_list[[i]] <- data.table(trt = lvl, horizon = horizons, risk = risks_h)
+    }
+    rbindlist(res_list)
+  }
+  
+  # 5. Point Estimates
+  point <- fast_risk_fun(coefs)
+  
+  # Return early if no CI requested
+  if (!conf_int) {
+    res <- list(risks = as_tibble(point))
+    
+    if (!is.null(rmst_tau)) {
+      if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
+      
+      point_rmst <- point %>%
+        filter(horizon <= rmst_tau) %>%
+        group_by(trt) %>%
+        arrange(horizon) %>%
+        mutate(
+          survival = 1 - risk,
+          time_diff = horizon - dplyr::lag(horizon, default = 0),
+          area = dplyr::lag(survival, default = 1) * time_diff
+        ) %>%
+        summarise(RMST = sum(area), .groups = "drop") %>%
+        mutate(
+          ref_RMST = RMST[trt == ref_group],
+          RMST_diff = ifelse(trt == ref_group, 0, RMST - ref_RMST)
+        ) %>% select(-ref_RMST)
+      
+      res$rmst <- point_rmst
+    }
+    return(res)
+  }
+  
+  # 6. Sequential Simulation for Confidence Intervals (Safe Mode)
+  sim_coefs <- mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
+  
+  # Standard lapply - completely avoids parallel processing instability
+  sim_list <- lapply(seq_len(nrow(sim_coefs)), function(i) {
+    fast_risk_fun(sim_coefs[i, ])
+  })
+  
+  sim_df <- rbindlist(sim_list, idcol = "sim")
+  
+  # 7. Compute Final Statistics (Standard dplyr format)
+  risk_ci <- sim_df %>%
+    group_by(trt, horizon) %>%
+    summarise(
+      risk_lower = quantile(risk, 0.025),
+      risk_upper = quantile(risk, 0.975),
+      risk = mean(risk), 
+      .groups = "drop"
+    )
+  
+  sim_contrasts <- sim_df %>%
+    group_by(sim, horizon) %>%
+    mutate(ref_risk = risk[trt == ref_group]) %>%
+    filter(trt != ref_group) %>%
+    mutate(RD = risk - ref_risk, RR = risk / ref_risk)
+  
+  contrast_ci <- sim_contrasts %>%
+    group_by(trt, horizon) %>%
+    summarise(
+      RD_lower = quantile(RD, 0.025),
+      RD_upper = quantile(RD, 0.975),
+      RD = mean(RD),
+      RR_lower = quantile(RR, 0.025),
+      RR_upper = quantile(RR, 0.975),
+      RR = mean(RR),
+      .groups = "drop"
+    )
+  
+  res <- list(risks = risk_ci, contrasts = contrast_ci, ref_group = ref_group)
+  
+  # 8. Compute RMST distributions if requested
+  if (!is.null(rmst_tau)) {
+    if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
+    
+    sim_rmst <- sim_df %>%
+      filter(horizon <= rmst_tau) %>%
+      group_by(sim, trt) %>%
+      arrange(horizon) %>%
+      mutate(
+        survival = 1 - risk,
+        time_diff = horizon - dplyr::lag(horizon, default = 0),
+        area = dplyr::lag(survival, default = 1) * time_diff
+      ) %>%
+      summarise(RMST = sum(area), .groups = "drop")
+    
+    rmst_ci <- sim_rmst %>%
+      group_by(trt) %>%
+      summarise(
+        RMST_lower = quantile(RMST, 0.025),
+        RMST_upper = quantile(RMST, 0.975),
+        RMST = mean(RMST),
+        .groups = "drop"
+      )
+    
+    rmst_contrasts <- sim_rmst %>%
+      group_by(sim) %>%
+      mutate(ref_RMST = RMST[trt == ref_group]) %>%
+      filter(trt != ref_group) %>%
+      mutate(RMST_diff = RMST - ref_RMST) %>%
+      group_by(trt) %>%
+      summarise(
+        RMST_diff_lower = quantile(RMST_diff, 0.025),
+        RMST_diff_upper = quantile(RMST_diff, 0.975),
+        RMST_diff = mean(RMST_diff),
+        .groups = "drop"
+      )
+    
+    res$rmst <- rmst_ci
+    res$rmst_contrasts <- rmst_contrasts
+  }
+  
+  return(res)
+}
+
+
+
 
 # hdPS ######
 
@@ -809,6 +999,63 @@ get_dat_all_prev_m <- function(dat1){
   
   return(dat.all)
 }
+
+
+get_dat_all_prev_b <- function(dat1){
+  
+  id_set <- dat1 %>% pull(unique_id)
+  
+  # Helper to read, mutate, and filter SAS data by unique_id
+  read_and_filter <- function(file, code_col, dim_name) {
+    df <- read_sas(file) %>%
+      mutate(unique_id = paste0(studyid_rev, "_", time0)) %>%
+      filter(paste0(studyid_rev, "_", time0) %in% id_set) %>%
+      transmute(
+        studyid_rev, time0,
+        unique_id,
+        code = na_if(as.character(.data[[code_col]]), ""),
+        dim = dim_name
+      ) %>%
+      na.omit()
+    return(df)
+  }
+  
+  dat.proxy <- bind_rows(
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Dad_diagx_prev_b.sas7bdat", "diagx_trunc", "diag"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Dad_proc_prev_b.sas7bdat", "icode_trunc", "proc"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Msp_diag_prev_b.sas7bdat", "diagcd_trunc", "msp_diag"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Msp_fee_prev_b.sas7bdat", "fitm", "msp_fee"),
+    read_and_filter("E:/SAS Data/Missed dose protocol_v2/Pnet_drug_rev_prev_b.sas7bdat", "TC5_CD_trunc", "pnet")
+  )
+  
+  # # Generate candidate empirical covariates
+  out1 <- get_candidate_covariates(
+    df = dat.proxy,
+    domainVarname = "dim",
+    eventCodeVarname = "code",
+    patientIdVarname = "unique_id",
+    patientIdVector = id_set,
+    n = 500,
+    min_num_patients = 20
+  )$covars_data
+  
+  
+  # Assess recurrence
+  out2 <- get_recurrence_covariates(
+    df = out1,
+    eventCodeVarname = "code",
+    patientIdVarname = "unique_id",
+    patientIdVector = id_set
+  )$recurrence_data
+  
+  # Merge with input
+  dat.all <- dat1 %>%
+    left_join(out2, by = "unique_id")
+  
+  return(dat.all)
+}
+
+
 
 
 

@@ -6,7 +6,7 @@ library(rlang)
 
 ## 1. SETUP & DIRECTORIES -------------------------------------------------------
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/Sensitivities/"
 dir.create(RES_DIR, showWarnings = FALSE, recursive = TRUE)
 
 TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
@@ -348,7 +348,7 @@ predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
 }
 
 ## 1. SETUP & DIRECTORIES -------------------------------------------------------
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/Sensitivities/"
 RISK_DIR  <- paste0(RES_DIR, "Risk/")
 dir.create(RISK_DIR, showWarnings = FALSE, recursive = TRUE)
 
@@ -471,7 +471,7 @@ for (sa in sa_names) {
 
 # MULTIPLE TIME ZERO ###########
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/Sensitivities/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/Sensitivities/"
 dir.create(RES_DIR, showWarnings = FALSE, recursive = TRUE)
 
 TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=40mg", "increase")
@@ -890,7 +890,7 @@ library(data.table)
 
 ## 1. SETUP & DIRECTORIES -------------------------------------------------------
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
 SA_DIR    <- paste0(RES_DIR, "Sensitivities/")
 RISK_DIR  <- paste0(SA_DIR, "Risk/")
 
@@ -1430,7 +1430,7 @@ library(data.table)
 
 ## 1. SETUP & DIRECTORIES -------------------------------------------------------
 DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
-RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
 SA_DIR    <- paste0(RES_DIR, "Sensitivities/")
 RISK_DIR  <- paste0(SA_DIR, "Risk/")
 
