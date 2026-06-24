@@ -152,8 +152,8 @@ add_ipcw <- function(dat, time_var, censor_var, covariates) {
 }
 
 
-# ── 4. EXECUTION FOR TRIAL 2 (3-4 DAYS) ───────────────────────────────────────
-# A. Calculate Baseline IPTW (Uses pp_out_vars)
+# BNX 3-5 days ###############
+
 ps_tr4_pp <- ps_model_wt(
   dat = dat_tr4_pp, exposure = "trt", out_vars = pp_out_vars, 
   clust_vars = clust_vars, baselinevars = c(baselinevars, "prior_episode"), 
@@ -209,8 +209,7 @@ risk_pp$tr4$dis$ci <- predict_cuminc_rmst(
 saveRDS(risk_pp$tr4, paste0(RES_DIR, "risk/risk_tr4_per_protocol.rds"))
 
 
-# ── 5. EXECUTION FOR TRIAL 3 (5-14 DAYS) ──────────────────────────────────────
-cat("\n--- Running Trial 3 (5-14 days) Per-Protocol ---\n")
+# BNX 6-14 days ###############
 
 # A. Calculate Baseline IPTW
 ps_tr5_pp <- ps_model_wt(
@@ -260,3 +259,12 @@ risk_pp$tr5$dis$ci <- predict_cuminc_rmst(
 saveRDS(risk_pp$tr5, paste0(RES_DIR, "risk/risk_tr5_per_protocol.rds"))
 
 cat("\n✓ Per-Protocol Analysis Complete. Results saved.\n")
+
+
+
+
+res = readRDS(paste0(RES_DIR, "risk/risk_tr5_per_protocol.rds"))
+
+
+res$od$ci
+

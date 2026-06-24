@@ -27,7 +27,7 @@ sa_manifest_od <- tibble::tribble(
   "4. Outcome definition", "Overdose-related acute\ncare visits or death", "standard", "Sensitivities/Risk/risk_tr5_SA16_Composite_OD.rds", "Sensitivities/ps_wt_tr5_SA16_Composite_OD.rds",
   "4. Outcome definition", "All-cause acute\ncare visits", "standard", "Sensitivities/Risk/risk_tr5_all_acute.rds", "PScore/ps_weight_tr5_all.rds",
   
-  "5. Causal contrast", "Censoring at subsequent\ninterruption of >2 days", "standard", "Sensitivities/Risk/risk_tr5_per_protocol.rds", "PScore/ps_weight_514d_hdPS.rds",
+  "5. Causal contrast", "Censoring at subsequent\ninterruption of >2 days", "standard", "Sensitivities/Risk/risk_tr5_per_protocol.rds", "PScore/ps_weight_tr5_hdPS.rds",
   
   "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr5_hdPS.rds", "PScore/ps_weight_tr5_hdPS.rds",  
   "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr5_hdPS_ML.rds", "PScore/ps_weight_tr5_hdPS_ML.rds",

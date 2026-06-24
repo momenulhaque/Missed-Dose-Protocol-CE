@@ -484,7 +484,134 @@ jpeg(paste0(RES_DIR, "Figures/", "smd_love_plots_tr5_all.jpg"),
 print(plot_tr5_all_final)
 dev.off()
 
+# 6. GENERATE TABLE 1 (First-interruption-in-any-episode) ########
+cat("\n=== Generating Table 1 for Trt 4 and Trt 5 ===\n")
 
+# Helper function to construct Table 1 with max paired SMDs
+make_max_smd_table1 <- function(ps_fit_obj, bvars, cvars, var_labels) {
+  
+  dat <- ps_fit_obj$data_weights
+  
+  # Ensure the reference level is the base factor
+  dat$trt <- factor(dat$trt, levels = c("no reversion", "1-<50%", ">=50%/<=4mg", "increase"))
+  
+  # 1. Extract Descriptive Statistics using tableone
+  cat_vars <- setdiff(bvars, cvars)
+  
+  t1 <- CreateTableOne(
+    vars = bvars, 
+    strata = "trt", 
+    data = dat, 
+    factorVars = cat_vars, 
+    test = FALSE
+  )
+  
+  # Format descriptors: median [Q1-Q3] for non-normal, n (%) for categorical
+  t1_printed <- print(
+    t1, 
+    nonnormal = cvars, 
+    quote = FALSE, 
+    noSpaces = TRUE, 
+    printToggle = FALSE,
+    catDigits = 1, 
+    contDigits = 2,
+    explain = FALSE
+  )
+  
+  t1_df <- as.data.frame(t1_printed)
+  t1_df$Variable <- rownames(t1_df)
+  
+  # Clean up tableone output names to match our custom labels
+  # Remove trailing levels or factors from row names to allow joining
+  t1_df$CleanVar <- gsub(" = .*| \\(mean \\(SD\\)\\)| \\(median \\[IQR\\]\\)", "", t1_df$Variable)
+  
+  # 2. Compute the 3 Paired SMDs using Cobalt (ATE estimand, pooled SD)
+  fmla <- as.formula(paste("trt ~", paste(bvars, collapse = " + ")))
+  
+  # Pair 1: <50% vs No reversion
+  d_1 <- subset(dat, trt %in% c("no reversion", "1-<50%"))
+  d_1$trt <- droplevels(d_1$trt)
+  bal_1 <- bal.tab(fmla, data = d_1, weights = d_1$wt_trunc, 
+                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled", 
+                   un = TRUE, stats = "mean.diffs")$Balance
+  
+  # Pair 2: >=50% vs No reversion
+  d_2 <- subset(dat, trt %in% c("no reversion", ">=50%/<=4mg"))
+  d_2$trt <- droplevels(d_2$trt)
+  bal_2 <- bal.tab(fmla, data = d_2, weights = d_2$wt_trunc, 
+                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled", 
+                   un = TRUE, stats = "mean.diffs")$Balance
+  
+  # Pair 3: Increase vs No reversion
+  d_3 <- subset(dat, trt %in% c("no reversion", "increase"))
+  d_3$trt <- droplevels(d_3$trt)
+  bal_3 <- bal.tab(fmla, data = d_3, weights = d_3$wt_trunc, 
+                   estimand = "ATE", m.threshold = 0.1, s.d.denom = "pooled", 
+                   un = TRUE, stats = "mean.diffs")$Balance
+  
+  # 3. Calculate Maximum Absolute SMD (Unweighted and Weighted)
+  smd_dat <- data.frame(
+    CleanVar = rownames(bal_1),
+    # Unweighted max SMD across the 3 pairs
+    SMD_Unadj = pmax(abs(bal_1$Diff.Un), abs(bal_2$Diff.Un), abs(bal_3$Diff.Un)),
+    # Weighted max SMD across the 3 pairs
+    SMD_Adj   = pmax(abs(bal_1$Diff.Adj), abs(bal_2$Diff.Adj), abs(bal_3$Diff.Adj))
+  )
+  
+  # 4. Merge and Format Final Table
+  final_tab <- left_join(t1_df, smd_dat, by = "CleanVar")
+  
+  # Map human-readable labels
+  final_tab$Characteristics <- var_labels[final_tab$CleanVar]
+  final_tab$Characteristics <- ifelse(is.na(final_tab$Characteristics), final_tab$Variable, final_tab$Characteristics)
+  
+  # Format columns for output
+  final_tab <- final_tab %>%
+    mutate(
+      `SMD before weighting` = sprintf("%.3f", SMD_Unadj),
+      `SMD after weighting`  = sprintf("%.3f", SMD_Adj)
+    ) %>%
+    select(
+      Characteristics,
+      `No dose change` = `no reversion`,
+      `<50% reduction` = `1-<50%`,
+      `>=50% reduction/<=40mg` = `>=50%/<=4mg`,
+      `Dose increase` = `increase`,
+      `SMD before weighting`,
+      `SMD after weighting`
+    )
+  
+  # Replace NA SMDs (e.g., categorical headers) with blank strings
+  final_tab$`SMD before weighting`[final_tab$`SMD before weighting` == "NA"] <- ""
+  final_tab$`SMD after weighting`[final_tab$`SMD after weighting` == "NA"] <- ""
+  
+  return(final_tab)
+}
+
+### Apply to Trial 4 (3-5 days) ######
+ps_tr4_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr4_all.rds"))
+
+table1_tr4 <- make_max_smd_table1(
+  ps_fit_obj = ps_tr4_all,
+  bvars = c(baselinevars, "prior_episode"),
+  cvars = c(continuous_vars, "prior_episode"),
+  var_labels = VAR_LABELS
+)
+
+write.csv(table1_tr4, file = paste0(RES_DIR, "Tables/Table1_tr4_all.csv"), row.names = FALSE)
+
+### Apply to Trial 5 (6-14 days) #########
+ps_tr5_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr5_all.rds"))
+table1_tr5 <- make_max_smd_table1(
+  ps_fit_obj = ps_tr5_all,
+  bvars = c(baselinevars, "prior_episode"),
+  cvars = c(continuous_vars, "prior_episode"),
+  var_labels = VAR_LABELS
+)
+
+write.csv(table1_tr5, file = paste0(RES_DIR, "Tables/Table1_tr5_all.csv"), row.names = FALSE)
+
+cat(" ✓ Tables saved to CSV.\n")
 
 # 7. RMST & CUMULATIVE INCIDENCE ####
 # Risk curves and confidence intervals for overdose and discontinuation
