@@ -1014,3 +1014,457 @@ run_outcome_safely(
 )
 
 cat("\n=== 30-DAY DISCONTINUATION PIPELINE COMPLETE ===\n")
+
+
+
+
+# BNX 6-7 and 8-14 days ########
+
+library(tidyverse)
+library(haven)
+library(nnet)
+library(splines)
+library(sandwich)
+library(mvtnorm)
+library(tableone)
+library(survey)
+library(cobalt)
+library(patchwork)
+library(cowplot)
+library(data.table)
+
+
+source("H:/GitHub/Missed-Dose-Protocol-CE/00_functions.R")   # ps_model_wt(), predict_cuminc(), expand_person_period()
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+DATA_DIR  <- "E:/SAS Data/Missed dose protocol_v2/"
+RES_DIR   <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/BNX/Sensitivities/"
+
+TRT_LEVELS <- c("no reversion", "1-<50%", ">=50%/<=4mg", "increase")
+
+out_vars   <- c("sens_discont", "time_discont",
+                "sens_od_acute", "time_od_acute",
+                "sens_all_acute", "time_all_acute")
+
+clust_vars <- c("studyid_rev", "episode", "time0")
+
+baselinevars <- c(
+  "sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
+  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
+  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
+  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
+  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss"
+)
+
+continuous_vars <- c("ddose_prev", "year", "ret_length")
+
+# Human-readable variable labels for Table 1 and love plots
+VAR_LABELS <- c(
+  sexM          = "Sex: Male",
+  age_lt30      = "Age category: 18-29",
+  age_30_39     = "Age category: 30-39",
+  age_40_49     = "Age category: 40-49",
+  age_ge50      = "Age category: 50+",
+  rural         = "Region: Rural",
+  year          = "Year of reinitiation date",
+  po_preOUD     = "Opioid dispensations other than OAT prior to the first OUD indication",
+  phy_att_gr2   = "Attachment to the prescriber who reinitiated OAT",
+  social_assist = "Receipt of income assistance in the past year",
+  ret_length    = "Duration of OAT episode before time zero",
+  home_grp_b    = "Unstable housing in past 5 years",
+  incar_grp_bl  = "Incarcerated in the past year",
+  drug_acute    = "Drug-related acute care visits in the past month",
+  cci_gt0       = "Charlson Comorbidity Index (>0)",
+  copd_asthma   = "Asthma or COPD in the past year",
+  sed_psy_med   = "Dispensations of psychiatric or sedative medication in the past month",
+  po            = "Dispensations opioid other than OAT in the past month",
+  sud           = "Other substance use disorder",
+  aud           = "Alcohol use disorder",
+  smd           = "Serious mental disorder",
+  hcv           = "Hepatitis C",
+  tob           = "Tobacco use disorder (past year)",
+  udt           = "Urine drug test in the past month",
+  ddose_prev    = "Last daily dose",
+  clin_size_b   = "Large practice size (>300 clients)",
+  virtual_care  = "Virtual care in past month",
+  pss           = "Prescriber safer supply",
+  prior_gap     = "Total OAT interruptions since initiation",
+  prior_episode = "Number of prior episode"
+)
+
+clean_trt_all <- function(dat) {
+  dat |>
+    mutate(
+      trt_s5 = if_else(trt_s5 %in% c("1-<25%", "25-<50%"), "1-<50%", trt_s5)
+    ) |>
+    rename(trt = trt_s5) |>
+    filter(trt %in% TRT_LEVELS) |>
+    mutate(trt = factor(trt, levels = TRT_LEVELS),
+           prior_episode = as.numeric(episode - 1)) |>
+    group_by(studyid_rev, episode) |>
+    mutate(
+      prior_gap     = cumsum(gap_days),
+      prior_gap_num = row_number()
+    ) %>%
+    ungroup()
+  
+}
+
+# 1. LOAD AND FILTER RAW SAS DATA #########
+raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_b.sas7bdat"))
+
+dat_tr5_d67 <- raw_all |>
+  filter(trial_gap %in% 6:7) |>
+  clean_trt_all() 
+
+dat_tr6_d814 <- raw_all |>
+  filter(trial_gap %in% 8:14) |>
+  clean_trt_all() 
+
+
+rm(raw_all); gc()
+
+# 2. PROPENSITY SCORE WEIGHTS ################
+ps_tr5_d67 <- ps_model_wt(
+  dat             = dat_tr5_d67,
+  exposure        = "trt",
+  baselinevars    = c(baselinevars, "prior_episode"),
+  continuous_vars = c(continuous_vars, "prior_episode"),
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr5_d67, paste0(RES_DIR, "ps_weight_tr5_d67.rds"))
+
+
+ps_tr6_d814 <- ps_model_wt(
+  dat             = dat_tr6_d814,
+  exposure        = "trt",
+  baselinevars    = c(baselinevars, "prior_episode"),
+  continuous_vars = c(continuous_vars, "prior_episode"),
+  out_vars        = out_vars,
+  clust_vars      = clust_vars
+)
+
+saveRDS(ps_tr6_d814, paste0(RES_DIR, "ps_weight_tr6_d814.rds"))
+
+# 3. RMST & CUMULATIVE INCIDENCE ####
+predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
+                                     cluster_var, samples = 1000, conf_int = TRUE,
+                                     ref_group = "no reversion", wt_type = "wt_trunc",
+                                     rmst_tau = 365) {
+  
+  # 1. Fit pooled logistic regression
+  covs1 <- paste0(c(trt_var, "ns(interval, df = 3)", covs), collapse = "+")
+  plr_formula <- as.formula(paste("event ~", covs1))
+  
+  model <- glm(plr_formula, data = Dat_expanded,
+               family = quasibinomial(), weights = Dat_expanded[[wt_type]])
+  
+  V <- sandwich::vcovCL(model, cluster = Dat_expanded[[cluster_var]], type = NULL,
+                        sandwich = TRUE, fix = FALSE)
+  coefs <- coef(model)
+  
+  # 2. Reference group & Factor Level Preservation
+  is_trt_factor <- is.factor(Dat_expanded[[trt_var]])
+  if (is_trt_factor) {
+    trt_levels <- levels(Dat_expanded[[trt_var]])
+  } else {
+    trt_levels <- as.character(unique(Dat_expanded[[trt_var]]))
+  }
+  
+  if (is.null(ref_group)) ref_group <- trt_levels[1]
+  
+  # 3. Pre-compute Design Matrices using data.table for extreme speed
+  dt <- as.data.table(Dat_expanded)
+  setorderv(dt, c(cluster_var, "stop")) 
+  
+  # Build a list of model matrices (one for each treatment level) ONCE.
+  mm_list <- lapply(trt_levels, function(lvl) {
+    dt_temp <- copy(dt)
+    
+    # Explicitly preserve factor levels so we don't trigger the contrasts error
+    if (is_trt_factor) {
+      dt_temp[[trt_var]] <- factor(lvl, levels = trt_levels)
+    } else {
+      dt_temp[[trt_var]] <- lvl
+    }
+    
+    # Use xlev = model$xlevels to strictly enforce the model's known factor levels
+    model.matrix(delete.response(terms(model)), data = dt_temp, xlev = model$xlevels)
+  })
+  names(mm_list) <- trt_levels
+  
+  # 4. Vectorized Risk Function (Runs strictly on pre-computed matrices)
+  fast_risk_fun <- function(coef_draw) {
+    res_list <- vector("list", length(trt_levels))
+    
+    for (i in seq_along(trt_levels)) {
+      lvl <- trt_levels[i]
+      
+      # Matrix multiplication for all observations at once
+      dt[, p_event := plogis(mm_list[[lvl]] %*% coef_draw)]
+      
+      # Fast cumulative product of survival probabilities grouped by cluster
+      dt[, cum_surv := cumprod(1 - p_event), by = cluster_var]
+      
+      # Extract mean risk at exact specified horizons
+      risks_h <- numeric(length(horizons))
+      for (j in seq_along(horizons)) {
+        h <- horizons[j]
+        risk_val <- 1 - dt[stop <= h, .(last_surv = cum_surv[.N]), by = cluster_var][, mean(last_surv)]
+        risks_h[j] <- risk_val
+      }
+      
+      res_list[[i]] <- data.table(trt = lvl, horizon = horizons, risk = risks_h)
+    }
+    rbindlist(res_list)
+  }
+  
+  # 5. Point Estimates
+  point <- fast_risk_fun(coefs)
+  
+  # Return early if no CI requested
+  if (!conf_int) {
+    res <- list(risks = as_tibble(point))
+    
+    if (!is.null(rmst_tau)) {
+      if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
+      
+      point_rmst <- point %>%
+        filter(horizon <= rmst_tau) %>%
+        group_by(trt) %>%
+        arrange(horizon) %>%
+        mutate(
+          survival = 1 - risk,
+          time_diff = horizon - dplyr::lag(horizon, default = 0),
+          area = dplyr::lag(survival, default = 1) * time_diff
+        ) %>%
+        summarise(RMST = sum(area), .groups = "drop") %>%
+        mutate(
+          ref_RMST = RMST[trt == ref_group],
+          RMST_diff = ifelse(trt == ref_group, 0, RMST - ref_RMST)
+        ) %>% select(-ref_RMST)
+      
+      res$rmst <- point_rmst
+    }
+    return(res)
+  }
+  
+  # 6. Sequential Simulation for Confidence Intervals (Safe Mode)
+  sim_coefs <- mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
+  
+  # Standard lapply - completely avoids parallel processing instability
+  sim_list <- lapply(seq_len(nrow(sim_coefs)), function(i) {
+    fast_risk_fun(sim_coefs[i, ])
+  })
+  
+  sim_df <- rbindlist(sim_list, idcol = "sim")
+  
+  # 7. Compute Final Statistics (Standard dplyr format)
+  risk_ci <- sim_df %>%
+    group_by(trt, horizon) %>%
+    summarise(
+      risk_lower = quantile(risk, 0.025),
+      risk_upper = quantile(risk, 0.975),
+      risk = mean(risk), 
+      .groups = "drop"
+    )
+  
+  sim_contrasts <- sim_df %>%
+    group_by(sim, horizon) %>%
+    mutate(ref_risk = risk[trt == ref_group]) %>%
+    filter(trt != ref_group) %>%
+    mutate(RD = risk - ref_risk, RR = risk / ref_risk)
+  
+  contrast_ci <- sim_contrasts %>%
+    group_by(trt, horizon) %>%
+    summarise(
+      RD_lower = quantile(RD, 0.025),
+      RD_upper = quantile(RD, 0.975),
+      RD = mean(RD),
+      RR_lower = quantile(RR, 0.025),
+      RR_upper = quantile(RR, 0.975),
+      RR = mean(RR),
+      .groups = "drop"
+    )
+  
+  res <- list(risks = risk_ci, contrasts = contrast_ci, ref_group = ref_group)
+  
+  # 8. Compute RMST distributions if requested
+  if (!is.null(rmst_tau)) {
+    if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
+    
+    sim_rmst <- sim_df %>%
+      filter(horizon <= rmst_tau) %>%
+      group_by(sim, trt) %>%
+      arrange(horizon) %>%
+      mutate(
+        survival = 1 - risk,
+        time_diff = horizon - dplyr::lag(horizon, default = 0),
+        area = dplyr::lag(survival, default = 1) * time_diff
+      ) %>%
+      summarise(RMST = sum(area), .groups = "drop")
+    
+    rmst_ci <- sim_rmst %>%
+      group_by(trt) %>%
+      summarise(
+        RMST_lower = quantile(RMST, 0.025),
+        RMST_upper = quantile(RMST, 0.975),
+        RMST = mean(RMST),
+        .groups = "drop"
+      )
+    
+    rmst_contrasts <- sim_rmst %>%
+      group_by(sim) %>%
+      mutate(ref_RMST = RMST[trt == ref_group]) %>%
+      filter(trt != ref_group) %>%
+      mutate(RMST_diff = RMST - ref_RMST) %>%
+      group_by(trt) %>%
+      summarise(
+        RMST_diff_lower = quantile(RMST_diff, 0.025),
+        RMST_diff_upper = quantile(RMST_diff, 0.975),
+        RMST_diff = mean(RMST_diff),
+        .groups = "drop"
+      )
+    
+    res$rmst <- rmst_ci
+    res$rmst_contrasts <- rmst_contrasts
+  }
+  
+  return(res)
+}
+
+
+
+cat("\n=== Computing Cumulative Incidence ===\n")
+
+HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
+HORIZONS_CI    <- sort(c(HORIZONS_CURVE, c(30, 60, 90, 180)))
+
+# ── INITIALIZE RESULTS STRUCTURE ──
+
+risk <- list(
+  tr5 = list(od = list(), dis = list()),
+  tr6 = list(od = list(), dis = list())
+)
+
+## BNX interruption of 6-7 days #############
+
+ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr5_d67.rds"))
+
+# Overdose
+long_dat <- expand_person_period(ps_fit$data_weights,
+                                 time_var  = "time_od_acute",
+                                 event_var = "sens_od_acute",
+                                 interval_length = 14)
+
+
+risk$tr5$od$curve <- predict_cuminc_rmst(
+  Dat_expanded = long_dat, trt_var = "trt",
+  covs = c("year"),
+  horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
+  wt_type = "wt_trunc", rmst_tau = 365
+)
+
+
+risk$tr5$od$ci <- predict_cuminc_rmst(
+  Dat_expanded = long_dat, trt_var = "trt",
+  covs = c("year"),
+  horizons = HORIZONS_CI, cluster_var = "studyid_rev",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
+  wt_type = "wt_trunc", rmst_tau = 365
+)
+
+# Discontinuation
+long_dat <- expand_person_period(ps_fit$data_weights,
+                                 time_var  = "time_discont",
+                                 event_var = "sens_discont",
+                                 interval_length = 14)
+
+risk$tr5$dis$curve <- predict_cuminc_rmst_fast(
+  Dat_expanded = long_dat, trt_var = "trt",
+  covs = c("year"),
+  horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
+  samples = 499, conf_int = FALSE, ref_group = "no reversion",
+  wt_type = "wt_trunc"
+)
+
+risk$tr5$dis$ci <- predict_cuminc_rmst_fast(
+  Dat_expanded = long_dat, trt_var = "trt",
+  covs = c("year"),
+  horizons = HORIZONS_CI, cluster_var = "studyid_rev",
+  samples = 499, conf_int = TRUE, ref_group = "no reversion",
+  wt_type = "wt_trunc"
+)
+
+rm(long_dat); gc()
+
+## BNX interruption of 8-14 days #############
+
+ps_fit <- readRDS(paste0(RES_DIR, "ps_weight_tr6_d814.rds"))
+
+# Overdose
+long_dat <- expand_person_period(ps_fit$data_weights, 
+                                 time_var = "time_od_acute",
+                                 event_var = "sens_od_acute", 
+                                 interval_length = 14)
+
+risk$tr6$od$curve <- predict_cuminc_rmst_fast(
+  Dat_expanded = long_dat, 
+  trt_var = "trt", 
+  covs = NULL, 
+  horizons = HORIZONS_CURVE,
+  cluster_var = "studyid_rev", 
+  samples = 499, 
+  conf_int = FALSE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+risk$tr6$od$ci <- predict_cuminc_rmst_fast(
+  Dat_expanded = long_dat, 
+  trt_var = "trt", 
+  covs = NULL, 
+  horizons = HORIZONS_CI,
+  cluster_var = "studyid_rev", 
+  samples = 499, 
+  conf_int = TRUE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+# Discontinuation
+long_dat <- expand_person_period(ps_fit$data_weights, 
+                                 time_var = "time_discont",
+                                 event_var = "sens_discont", 
+                                 interval_length = 14)
+
+risk$tr6$dis$curve <- predict_cuminc_rmst_fast(
+  Dat_expanded = long_dat,
+  trt_var = "trt", 
+  covs = NULL,  
+  horizons = HORIZONS_CURVE,
+  cluster_var = "studyid_rev", 
+  samples = 499, 
+  conf_int = FALSE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+risk$tr6$dis$ci <- predict_cuminc_rmst_fast(
+  Dat_expanded = long_dat, 
+  trt_var = "trt", 
+  covs = NULL,
+  horizons = HORIZONS_CI,
+  cluster_var = "studyid_rev", 
+  samples = 499, 
+  conf_int = TRUE,
+  ref_group = "no reversion", 
+  wt_type = "wt_trunc"
+)
+
+rm(long_dat); gc()
+
+saveRDS(risk$tr6, paste0(RES_DIR, "Risk/", "risk_tr6_d814.rds"))
