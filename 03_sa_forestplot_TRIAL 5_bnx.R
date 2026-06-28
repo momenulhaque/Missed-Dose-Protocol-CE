@@ -17,6 +17,9 @@ sa_manifest_od <- tibble::tribble(
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr5_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr5_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr5_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr5_SA11_CumOAT_GE1yr.rds",
   "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr5_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr5_SA13_30dWashout.rds",    
+  "1. Sample restriction", "Alternative trial:\nInterruption of 6-7 days", "standard", "Sensitivities/Risk/risk_tr5_d67.rds", "Sensitivities/ps_wt_tr5_SA13_30dWashout.rds",
+  "1. Sample restriction", "Alternative trial:\nInterruption of 8-14 days", "standard", "Sensitivities/Risk/risk_tr6_d814.rds", "Sensitivities/ps_wt_tr5_SA13_30dWashout.rds",
+  
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr5_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr5_SA10_PostFentEra.rds",
   
@@ -47,6 +50,10 @@ sa_manifest_dis <- tibble::tribble(
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr5_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr5_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr5_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr5_SA11_CumOAT_GE1yr.rds",
   "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr5_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr5_SA13_30dWashout.rds",    
+  "1. Sample restriction", "Alternative trial:\nInterruption of 6-7 days", "standard", "Sensitivities/Risk/risk_tr5_d67.rds", "Sensitivities/ps_wt_tr5_SA13_30dWashout.rds",
+  "1. Sample restriction", "Alternative trial:\nInterruption of 8-14 days", "standard", "Sensitivities/Risk/risk_tr6_d814.rds", "Sensitivities/ps_wt_tr5_SA13_30dWashout.rds",
+  
+  
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr5_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr5_SA10_PostFentEra.rds",
   
@@ -62,7 +69,7 @@ sa_manifest_dis <- tibble::tribble(
   "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr5_hdPS_ML.rds", "PScore/ps_weight_tr5_hdPS_ML.rds",
   "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr5_rmst_ow.rds", "PScore/ps_weight_tr5_all.rds",
   "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr5_rmst_cl.rds", "PScore/ps_weight_tr5_all_cl.rds"
-  )
+)
 
 trt_clean <- c(
   "no reversion" = "No dose change", 
@@ -275,7 +282,7 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/SA_Forest_tr5_OD.jpg"), width = 3550, height = 5500, res = 300)
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_tr5_OD.jpg"), width = 3550, height = 5900, res = 300)
 p_od
 dev.off()
 
@@ -319,6 +326,6 @@ for(i in 1:nrow(plot_data_dis)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/SA_Forest_tr5_DIS.jpg"), width = 3550, height = 5300, res = 300)
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_tr5_DIS.jpg"), width = 3550, height = 5700, res = 300)
 p_dis
 dev.off()

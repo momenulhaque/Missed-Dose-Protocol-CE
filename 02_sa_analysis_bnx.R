@@ -1398,6 +1398,9 @@ risk$tr5$dis$ci <- predict_cuminc_rmst_fast(
   samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
 )
+saveRDS(risk$tr5, paste0(RES_DIR, "Risk/", "risk_tr5_d67.rds"))
+
+
 
 rm(long_dat); gc()
 
@@ -1468,3 +1471,4 @@ risk$tr6$dis$ci <- predict_cuminc_rmst_fast(
 rm(long_dat); gc()
 
 saveRDS(risk$tr6, paste0(RES_DIR, "Risk/", "risk_tr6_d814.rds"))
+

@@ -25,7 +25,7 @@ build_km_df <- function(dat, time_var = "time_od_acute", event_var = "sens_od_ac
       trt_label = recode(trt,
                          "no reversion" = "No dose change",
                          "1-<50%" = "<50% reduction",
-                         ">=50%/<=40mg" = "\u226550% reduction/\u22644mg",
+                         ">=50%/<=4mg" = "\u226550% reduction/\u22644mg",
                          "increase" = "Dose increase"),
       trt_label = factor(trt_label, levels = names(trt_colors_km))
     )
@@ -51,7 +51,7 @@ build_event_table <- function(dat, time_var = "time_od_acute", event_var = "sens
       trt_label = recode(trt,
                          "no reversion" = "No dose change",
                          "1-<50%" = "<50% reduction",
-                         ">=50%/<=40mg" = "\u226550% reduction/\u22644mg",
+                         ">=50%/<=4mg" = "\u226550% reduction/\u22644mg",
                          "increase" = "Dose increase")
     )
   
