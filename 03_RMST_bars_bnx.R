@@ -62,23 +62,16 @@ get_unadjusted_rmst <- function(df, horizon = 365) {
 # ── 4. Calculate Stratified RMST ────────────────────────────────────────────
 
 # Trial 4 (3-4 days)
-rmst_tr4_le30 <- get_unadjusted_rmst(dat_tr4 |> filter(ret_strata == "\u226430 days")) |> 
+rmst_tr4 <- get_unadjusted_rmst(dat_tr4) |> 
   mutate(panel = "Interruption of 3-5 days", ret_strata = "\u226430 days")
 
-rmst_tr4_gt30 <- get_unadjusted_rmst(dat_tr4 |> filter(ret_strata == ">30 days")) |> 
-  mutate(panel = "Interruption of 3-5 days", ret_strata = ">30 days")
-
 # Trial 5 (5-14 days)
-rmst_tr5_le30 <- get_unadjusted_rmst(dat_tr5 |> filter(ret_strata == "\u226430 days")) |> 
+rmst_tr5 <- get_unadjusted_rmst(dat_tr5) |> 
   mutate(panel = "Interruption of 6-14 days", ret_strata = "\u226430 days")
 
-rmst_tr5_gt30 <- get_unadjusted_rmst(dat_tr5 |> filter(ret_strata == ">30 days")) |> 
-  mutate(panel = "Interruption of 6-14 days", ret_strata = ">30 days")
 
 # Combine all unadjusted results
-rmst_abs <- bind_rows(rmst_tr4_le30, rmst_tr4_gt30, rmst_tr5_le30, rmst_tr5_gt30) |>
-  mutate(ret_strata = factor(ret_strata, levels = c("\u226430 days", ">30 days")))
-
+rmst_abs <- bind_rows(rmst_tr4, rmst_tr5)
 
 # ── 5. Visualization ────────────────────────────────────────────────────────
 plot_bar <- ggplot(rmst_abs, aes(x = trt, y = RMST, fill = trt)) +
@@ -86,7 +79,7 @@ plot_bar <- ggplot(rmst_abs, aes(x = trt, y = RMST, fill = trt)) +
   geom_errorbar(aes(ymin = RMST_lower, ymax = RMST_upper), width = 0.2, linewidth = 0.7) +
   geom_text(aes(label = paste0(round(RMST), " days"), y = RMST / 2), 
             color = "white", angle = 90, size = 4, fontface = "bold") +
-  facet_grid(ret_strata~panel) +
+  facet_grid(~panel) +
   scale_fill_manual(values = PLOT_COLORS) +
   scale_y_continuous(limits = c(0, 365), expand = c(0, 0)) +
   labs(
@@ -106,7 +99,7 @@ plot_bar <- ggplot(rmst_abs, aes(x = trt, y = RMST, fill = trt)) +
     panel.grid = element_blank()
   )
 
-ggsave(paste0(RES_DIR, "Figures/eFigure6_Unadjusted_BarPlot_BNX.jpg"), plot_bar, width = 12, height = 10, dpi = 300)
+ggsave(paste0(RES_DIR, "Figures/eFigure6_Unadjusted_BarPlot_BNX.jpg"), plot_bar, width = 14, height = 9, dpi = 300)
 
 
 
