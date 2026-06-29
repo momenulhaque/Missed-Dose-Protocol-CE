@@ -267,11 +267,14 @@ plot_km_curve_discont <- function(df) {
 }
 
 # 5. Generate data, curves, and tables for both trials
+dat_tr4_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr4_all.rds"))
+dat_tr5_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr5_all.rds"))
+
 df_km_tr4_dis <- build_km_df_discont(dat_tr4_all$data_weights)
 df_km_tr5_dis <- build_km_df_discont(dat_tr5_all$data_weights)
 
 p_km_tr4_dis  <- plot_km_curve_discont(df_km_tr4_dis)
-p_tab_tr4_dis <- build_event_table_discont(dat_tr5_all$data_weights)
+p_tab_tr4_dis <- build_event_table_discont(dat_tr4_all$data_weights)
 
 p_km_tr5_dis  <- plot_km_curve_discont(df_km_tr5_dis)
 p_tab_tr5_dis <- build_event_table_discont(dat_tr5_all$data_weights)
