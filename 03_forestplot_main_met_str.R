@@ -208,14 +208,14 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-p_2a_final <- add_grob(p_2a, row = nrow(plot_data_od) + 2, col = 1:2, order = "background", 
-                       gb_fn = gridtext::richtext_grob, 
-                       text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
-                       gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
-                       x = unit(0, "npc"), y = unit(1, "npc"))
+# p_2a_final <- add_grob(p_2a, row = nrow(plot_data_od) + 2, col = 1:2, order = "background", 
+#                        gb_fn = gridtext::richtext_grob, 
+#                        text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
+#                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
+#                        x = unit(0, "npc"), y = unit(1, "npc"))
 
 jpeg(paste0(RES_DIR, "Figures/Figure2_OD_RD.jpg"), width = 5800, height = 2400, res = 400)
-p_2a_final
+p_2a
 dev.off()
 
 
@@ -320,12 +320,12 @@ for(i in 1:nrow(plot_data_dis)) {
   }
 }
 
-p_2b_final <- add_grob(p_2b, row = nrow(plot_data_dis) + 2, col = 1:2, order = "background", 
-                       gb_fn = gridtext::richtext_grob, 
-                       text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
-                       gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
-                       x = unit(0, "npc"), y = unit(1, "npc"))
+# p_2b_final <- add_grob(p_2b, row = nrow(plot_data_dis) + 2, col = 1:2, order = "background", 
+#                        gb_fn = gridtext::richtext_grob, 
+#                        text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
+#                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
+#                        x = unit(0, "npc"), y = unit(1, "npc"))
 
 jpeg(paste0(RES_DIR, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2400, res = 400)
-p_2b_final
+p_2b
 dev.off()
