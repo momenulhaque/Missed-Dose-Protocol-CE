@@ -498,62 +498,87 @@ cat("  ✓ Trial 2, First-interruption-in-any-episode SMD figure saved.\n")
 
 # 7. RMST & CUMULATIVE INCIDENCE ####
 # Risk curves and confidence intervals for overdose and discontinuation
-predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
-                                cluster_var, samples = 1000, conf_int = TRUE,
-                                ref_group = "no reversion", wt_type="wt_trunc",
-                                rmst_tau = 365) {
+predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
+                                     cluster_var, samples = 1000, conf_int = TRUE,
+                                     ref_group = "no reversion", wt_type = "wt_trunc",
+                                     rmst_tau = 365) {
   
-  # Formula for pooled logistic regression
+  # 1. Fit pooled logistic regression
   covs1 <- paste0(c(trt_var, "ns(interval, df = 3)", covs), collapse = "+")
   plr_formula <- as.formula(paste("event ~", covs1))
   
-  # Fit GLM using quasibinomial to suppress fractional weight warnings
   model <- glm(plr_formula, data = Dat_expanded,
                family = quasibinomial(), weights = Dat_expanded[[wt_type]])
   
-  # Cluster-robust covariance
   V <- sandwich::vcovCL(model, cluster = Dat_expanded[[cluster_var]], type = NULL,
                         sandwich = TRUE, fix = FALSE)
-  
   coefs <- coef(model)
   
-  # Function to calculate risk at a given horizon
-  risk_fun <- function(coef_draw, h) {
-    nd <- Dat_expanded %>% filter(stop <= h)
-    
-    risks <- lapply(unique(Dat_expanded[[trt_var]]), function(trt_level) {
-      nd_trt <- nd
-      nd_trt[[trt_var]] <- trt_level
-      
-      mm_trt <- model.matrix(delete.response(terms(model)), nd_trt)
-      p_trt <- plogis(mm_trt %*% coef_draw)
-      nd_trt$p_event <- p_trt
-      
-      df_pred <- nd_trt %>%
-        group_by(.data[[cluster_var]]) %>%
-        summarise(surv = prod(1 - p_event), .groups = "drop") %>%
-        mutate(risk = 1 - surv)
-      
-      tibble(trt = as.character(trt_level), horizon = h, risk = mean(df_pred$risk))
-    })
-    
-    bind_rows(risks)
+  # 2. Reference group & Factor Level Preservation
+  is_trt_factor <- is.factor(Dat_expanded[[trt_var]])
+  if (is_trt_factor) {
+    trt_levels <- levels(Dat_expanded[[trt_var]])
+  } else {
+    trt_levels <- as.character(unique(Dat_expanded[[trt_var]]))
   }
   
-  # Reference group check
-  if(is.null(ref_group)) {
-    ref_group <- as.character(unique(Dat_expanded[[trt_var]]))[1]
+  if (is.null(ref_group)) ref_group <- trt_levels[1]
+  
+  # 3. Pre-compute Design Matrices using data.table for extreme speed
+  dt <- as.data.table(Dat_expanded)
+  setorderv(dt, c(cluster_var, "stop")) 
+  
+  # Build a list of model matrices (one for each treatment level) ONCE.
+  mm_list <- lapply(trt_levels, function(lvl) {
+    dt_temp <- copy(dt)
+    
+    # Explicitly preserve factor levels so we don't trigger the contrasts error
+    if (is_trt_factor) {
+      dt_temp[[trt_var]] <- factor(lvl, levels = trt_levels)
+    } else {
+      dt_temp[[trt_var]] <- lvl
+    }
+    
+    # Use xlev = model$xlevels to strictly enforce the model's known factor levels
+    model.matrix(delete.response(terms(model)), data = dt_temp, xlev = model$xlevels)
+  })
+  names(mm_list) <- trt_levels
+  
+  # 4. Vectorized Risk Function (Runs strictly on pre-computed matrices)
+  fast_risk_fun <- function(coef_draw) {
+    res_list <- vector("list", length(trt_levels))
+    
+    for (i in seq_along(trt_levels)) {
+      lvl <- trt_levels[i]
+      
+      # Matrix multiplication for all observations at once
+      dt[, p_event := plogis(mm_list[[lvl]] %*% coef_draw)]
+      
+      # Fast cumulative product of survival probabilities grouped by cluster
+      dt[, cum_surv := cumprod(1 - p_event), by = cluster_var]
+      
+      # Extract mean risk at exact specified horizons
+      risks_h <- numeric(length(horizons))
+      for (j in seq_along(horizons)) {
+        h <- horizons[j]
+        risk_val <- 1 - dt[stop <= h, .(last_surv = cum_surv[.N]), by = cluster_var][, mean(last_surv)]
+        risks_h[j] <- risk_val
+      }
+      
+      res_list[[i]] <- data.table(trt = lvl, horizon = horizons, risk = risks_h)
+    }
+    rbindlist(res_list)
   }
   
-  # Point estimates
-  point <- bind_rows(lapply(horizons, function(h) risk_fun(coefs, h)))
+  # 5. Point Estimates
+  point <- fast_risk_fun(coefs)
   
-  if(!conf_int) {
-    res <- list(risks = point)
+  # Return early if no CI requested
+  if (!conf_int) {
+    res <- list(risks = as_tibble(point))
     
-    # Point estimate for RMST if requested
-    if(!is.null(rmst_tau)) {
-      if(max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
+    if (!is.null(rmst_tau)) {
+      if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
       
       point_rmst <- point %>%
         filter(horizon <= rmst_tau) %>%
@@ -568,42 +593,39 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
         mutate(
           ref_RMST = RMST[trt == ref_group],
           RMST_diff = ifelse(trt == ref_group, 0, RMST - ref_RMST)
-        ) %>% dplyr::select(-ref_RMST) # <-- Explicitly namespaced to avoid MASS collision
+        ) %>% select(-ref_RMST)
       
       res$rmst <- point_rmst
     }
     return(res)
   }
   
-  # Simulate coefficient draws for CI
+  # 6. Sequential Simulation for Confidence Intervals (Safe Mode)
   sim_coefs <- mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
   
+  # Standard lapply - completely avoids parallel processing instability
   sim_list <- lapply(seq_len(nrow(sim_coefs)), function(i) {
-    bind_rows(lapply(horizons, function(h) risk_fun(sim_coefs[i,], h)))
+    fast_risk_fun(sim_coefs[i, ])
   })
-  sim_df <- bind_rows(sim_list, .id = "sim")
   
-  # Risk CI
+  sim_df <- rbindlist(sim_list, idcol = "sim")
+  
+  # 7. Compute Final Statistics (Standard dplyr format)
   risk_ci <- sim_df %>%
     group_by(trt, horizon) %>%
     summarise(
       risk_lower = quantile(risk, 0.025),
       risk_upper = quantile(risk, 0.975),
-      risk = mean(risk),  # point estimate from simulation
+      risk = mean(risk), 
       .groups = "drop"
     )
   
-  # Compute RD and RR in each simulation
   sim_contrasts <- sim_df %>%
     group_by(sim, horizon) %>%
     mutate(ref_risk = risk[trt == ref_group]) %>%
     filter(trt != ref_group) %>%
-    mutate(
-      RD = risk - ref_risk,
-      RR = risk / ref_risk
-    )
+    mutate(RD = risk - ref_risk, RR = risk / ref_risk)
   
-  # Summarise RD and RR
   contrast_ci <- sim_contrasts %>%
     group_by(trt, horizon) %>%
     summarise(
@@ -616,13 +638,9 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
       .groups = "drop"
     )
   
-  res <- list(
-    risks = risk_ci,
-    contrasts = contrast_ci,
-    ref_group = ref_group
-  )
+  res <- list(risks = risk_ci, contrasts = contrast_ci, ref_group = ref_group)
   
-  # Compute RMST distribution if requested
+  # 8. Compute RMST distributions if requested
   if (!is.null(rmst_tau)) {
     if (max(horizons) < rmst_tau) stop("max(horizons) must be >= rmst_tau to compute RMST.")
     
@@ -705,7 +723,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  interval_length = 14)
 
 
-risk$tr2$first$od$curve <- predict_cuminc_rmst(
+risk$tr2$first$od$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
@@ -714,7 +732,7 @@ risk$tr2$first$od$curve <- predict_cuminc_rmst(
 )
 
 
-risk$tr2$first$od$ci <- predict_cuminc_rmst(
+risk$tr2$first$od$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
@@ -728,7 +746,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_discont",
                                  interval_length = 14)
 
-risk$tr2$first$dis$curve <- predict_cuminc_rmst(
+risk$tr2$first$dis$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
@@ -736,7 +754,7 @@ risk$tr2$first$dis$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc"
 )
 
-risk$tr2$first$dis$ci <- predict_cuminc_rmst(
+risk$tr2$first$dis$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("po_preOUD", "phy_att_gr2", "ret_length", "sud", "ddose_prev"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
@@ -757,7 +775,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_od_acute", 
                                  interval_length = 14)
 
-risk$tr2$all$od$curve <- predict_cuminc_rmst(
+risk$tr2$all$od$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
   covs = c("ddose_prev", "prior_episode"), 
@@ -769,7 +787,7 @@ risk$tr2$all$od$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc"
 )
 
-risk$tr2$all$od$ci <- predict_cuminc_rmst(
+risk$tr2$all$od$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
   covs = c("ddose_prev", "prior_episode"), 
@@ -787,7 +805,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_discont", 
                                  interval_length = 14)
 
-risk$tr2$all$dis$curve <- predict_cuminc_rmst(
+risk$tr2$all$dis$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat,
   trt_var = "trt", 
   covs = c("ddose_prev", "prior_episode"),  
@@ -799,7 +817,7 @@ risk$tr2$all$dis$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc"
 )
 
-risk$tr2$all$dis$ci <- predict_cuminc_rmst(
+risk$tr2$all$dis$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
   covs = c("ddose_prev", "prior_episode"),
@@ -833,7 +851,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_od_acute",
                                  interval_length = 14)
 
-risk$tr3$first$od$curve <- predict_cuminc_rmst(
+risk$tr3$first$od$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
@@ -841,7 +859,7 @@ risk$tr3$first$od$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc"
 )
 
-risk$tr3$first$od$ci <- predict_cuminc_rmst(
+risk$tr3$first$od$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
@@ -855,7 +873,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_discont",
                                  interval_length = 14)
 
-risk$tr3$first$dis$curve <- predict_cuminc_rmst(
+risk$tr3$first$dis$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
@@ -864,7 +882,7 @@ risk$tr3$first$dis$curve <- predict_cuminc_rmst(
 )
 
 
-risk$tr3$first$dis$ci <- predict_cuminc_rmst(
+risk$tr3$first$dis$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "ret_length"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
@@ -885,7 +903,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_od_acute",
                                  interval_length = 14)
 
-risk$tr3$all$od$curve <- predict_cuminc_rmst(
+risk$tr3$all$od$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
@@ -893,7 +911,7 @@ risk$tr3$all$od$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc"
 )
 
-risk$tr3$all$od$ci <- predict_cuminc_rmst(
+risk$tr3$all$od$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
@@ -907,7 +925,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
                                  event_var = "sens_discont",
                                  interval_length = 14)
 
-risk$tr3$all$dis$curve <- predict_cuminc_rmst(
+risk$tr3$all$dis$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
@@ -915,7 +933,7 @@ risk$tr3$all$dis$curve <- predict_cuminc_rmst(
   wt_type = "wt_trunc"
 )
 
-risk$tr3$all$dis$ci <- predict_cuminc_rmst(
+risk$tr3$all$dis$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
   covs = c("ddose_prev", "year"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
