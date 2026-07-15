@@ -756,8 +756,8 @@ predict_cuminc_rmst <- function(Dat_expanded, trt_var, covs, horizons,
 }
 
 predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
-                                     cluster_var, samples = 1000, conf_int = TRUE,
-                                     ref_group = "no reversion", wt_type = "ow_wt",
+                                     cluster_var, samples = 999, conf_int = TRUE,
+                                     ref_group = "no reversion", wt_type = "wt_trunc",
                                      rmst_tau = 365) {
   
   # 1. Fit pooled logistic regression
@@ -857,15 +857,35 @@ predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
     return(res)
   }
   
-  # 6. Sequential Simulation for Confidence Intervals (Safe Mode)
-  sim_coefs <- mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
+  # 6. Sequential Simulation for Confidence Intervals (Safe Mode with Fallback)
+  sim_coefs <- tryCatch({
+    # Primary Attempt: Standard multivariate normal draw
+    mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V)
+    
+  }, error = function(e) {
+    # Fallback: Matrix correction for asymmetry or non-positive-definiteness
+    warning(paste("Standard mvtnorm failed:", e$message, 
+                  "\nApplying nearest positive-definite projection to variance matrix."))
+    
+    # Force perfect symmetry
+    V_sym <- (V + t(V)) / 2
+    
+    # Project to nearest positive-definite matrix
+    V_pd <- as.matrix(Matrix::nearPD(V_sym)$mat)
+    
+    # Draw from the corrected matrix
+    mvtnorm::rmvnorm(n = samples, mean = coefs, sigma = V_pd)
+  })
   
   # Standard lapply - completely avoids parallel processing instability
   sim_list <- lapply(seq_len(nrow(sim_coefs)), function(i) {
     fast_risk_fun(sim_coefs[i, ])
   })
   
+  # ---> RESTORED: Combine the list into the required dataframe <---
   sim_df <- rbindlist(sim_list, idcol = "sim")
+  
+  
   
   # 7. Compute Final Statistics (Standard dplyr format)
   risk_ci <- sim_df %>%
@@ -895,7 +915,13 @@ predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
       .groups = "drop"
     )
   
-  res <- list(risks = risk_ci, contrasts = contrast_ci, ref_group = ref_group)
+  res <- list(
+    risks = risk_ci, 
+    contrasts = contrast_ci, 
+    ref_group = ref_group,
+    sim_data = sim_df 
+  )
+  
   
   # 8. Compute RMST distributions if requested
   if (!is.null(rmst_tau)) {
@@ -940,6 +966,9 @@ predict_cuminc_rmst_fast <- function(Dat_expanded, trt_var, covs, horizons,
   
   return(res)
 }
+
+
+
 
 
 

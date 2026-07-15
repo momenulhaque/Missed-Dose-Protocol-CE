@@ -107,7 +107,7 @@ trt_colors <- c(
   "Dose increase" = "#D62728"
 )
 
-# ── 3. FIGURE 2A: OVERDOSE RISK DIFFERENCE (30 Days) ──────────────────────────
+# FIGURE 2: OD ##################
 
 risk_at_od <- 30
 
@@ -214,12 +214,12 @@ for(i in 1:nrow(plot_data_od)) {
 #                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
 #                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/Figure2_OD_RD.jpg"), width = 5800, height = 2400, res = 400)
+jpeg(paste0(RES_DIR, "Figures/Figure2_OD_RD.jpg"), width = 5800, height = 2500, res = 400)
 p_2a
 dev.off()
 
 
-# ── 3. FIGURE 2A: OVERDOSE RISK DIFFERENCE (30 Days) ──────────────────────────
+# FIGURE 3: DIS ##############
 
 risk_at_dis <- 365
 
@@ -326,6 +326,104 @@ for(i in 1:nrow(plot_data_dis)) {
 #                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
 #                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2400, res = 400)
+jpeg(paste0(RES_DIR, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2500, res = 400)
 p_2b
 dev.off()
+
+
+# Interaction contrast ######################
+calc_ic_from_separate <- function(sim_data_ref, 
+                                  sim_data_alt, 
+                                  target_horizon, 
+                                  active_trts = c("1-<50%", ">=50%/<=40mg", "increase"),
+                                  ref_trt = "no reversion") {
+  
+  # Filter both datasets to the target horizon
+  d_ref <- sim_data_ref |> filter(horizon == target_horizon) |> select(sim, trt, risk_ref = risk)
+  d_alt <- sim_data_alt |> filter(horizon == target_horizon) |> select(sim, trt, risk_alt = risk)
+  
+  if (nrow(d_ref) == 0 | nrow(d_alt) == 0) stop("Target horizon not found in one or both datasets.")
+  
+  # Pivot both to wide format
+  d_ref_wide <- d_ref |> pivot_wider(names_from = trt, values_from = risk_ref, names_prefix = "ref_")
+  d_alt_wide <- d_alt |> pivot_wider(names_from = trt, values_from = risk_alt, names_prefix = "alt_")
+  
+  # Join the independent bootstrap draws by simulation ID
+  d_joined <- inner_join(d_ref_wide, d_alt_wide, by = "sim")
+  
+  # Iterate over active treatments to calculate the IC per simulation
+  res_list <- lapply(active_trts, function(t_level) {
+    
+    ref_base_col <- paste0("ref_", ref_trt)
+    ref_act_col  <- paste0("ref_", t_level)
+    alt_base_col <- paste0("alt_", ref_trt)
+    alt_act_col  <- paste0("alt_", t_level)
+    
+    d_calc <- d_joined |>
+      mutate(
+        # Stratified Risk Differences
+        RD_ref_stratum = .data[[ref_act_col]] - .data[[ref_base_col]],
+        RD_alt_stratum = .data[[alt_act_col]] - .data[[alt_base_col]],
+        
+        # Interaction Contrast
+        IC = RD_alt_stratum - RD_ref_stratum
+      ) |>
+      select(sim, IC)
+    
+    # Summarize across the bootstrap distribution
+    d_summary <- d_calc |>
+      summarise(
+        Treatment = t_level,
+        Metric = "Interaction Contrast (IC)",
+        Estimate = mean(IC),
+        Lower_95CI = quantile(IC, 0.025),
+        Upper_95CI = quantile(IC, 0.975),
+        .groups = "drop"
+      )
+    
+    return(d_summary)
+  })
+  
+  bind_rows(res_list) |> arrange(Treatment)
+}
+
+
+risk_tr2_le30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/LE30D/", "Risk/", "risk_tr2.rds"))
+risk_tr2_gt30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/GT30D/", "Risk/", "risk_tr2.rds"))
+
+risk_tr3_le30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/LE30D/", "Risk/", "risk_tr3.rds"))
+risk_tr3_gt30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/GT30D/", "Risk/", "risk_tr3.rds"))
+
+
+dim(risk_tr2_gt30$od$ci$sim_data)
+
+
+ic2_results_od_30 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr2_gt30$od$ci$sim_data, 
+  sim_data_alt = risk_tr2_le30$od$ci$sim_data, 
+  target_horizon = 30
+)
+
+ic3_results_od_30 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr3_gt30$od$ci$sim_data, 
+  sim_data_alt = risk_tr3_le30$od$ci$sim_data, 
+  target_horizon = 30
+)
+
+
+
+ic2_results_dis_365 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr2_gt30$dis$ci$sim_data, 
+  sim_data_alt = risk_tr2_le30$dis$ci$sim_data, 
+  target_horizon = 365
+)
+
+ic3_results_dis_365 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr3_gt30$dis$ci$sim_data, 
+  sim_data_alt = risk_tr3_le30$dis$ci$sim_data, 
+  target_horizon = 365
+)
+
+
+
+
