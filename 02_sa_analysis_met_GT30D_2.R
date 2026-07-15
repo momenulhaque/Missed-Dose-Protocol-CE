@@ -424,6 +424,17 @@ clean_trt_hdPS <- function(dat) {
   
 }
 
+baselinevars <- c(
+  "sexM", "age_lt30", "age_30_39", "age_40_49", "age_ge50",
+  "rural", "year", "po_preOUD", "phy_att_gr2", "social_assist",
+  "ret_length", "home_grp_b", "incar_grp_bl", "drug_acute", "cci_gt0",
+  "copd_asthma", "sed_psy_med", "po", "sud", "aud", "smd", "hcv", "tob",
+  "udt", "ddose_prev", "clin_size_b", "virtual_care", "pss", "prior_episode"
+)
+continuous_vars <- c("ddose_prev", "year", "ret_length", "prior_episode")
+
+
+
 raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
 
 dat_tr2_all <- raw_all |>

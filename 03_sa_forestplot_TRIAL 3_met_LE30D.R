@@ -356,8 +356,9 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30,
   names(df_with_headers)[names(df_with_headers) == "Dose_Adj"]      <- "Dose adjustment"
   names(df_with_headers)[names(df_with_headers) == "Episode"]       <- "Episodes at risk\nat reinitiation"
   names(df_with_headers)[names(df_with_headers) == "abs_risk_disp"] <- risk_col_name
-  names(df_with_headers)[names(df_with_headers) == "rd_disp"]       <- "Risk Difference (%) (95% CI)"
-  names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"]   <- " "
+  if(outcome == "od") names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- "% difference in 1-month risk (95% CI)"
+  if(outcome == "dis") names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- "% difference in 12-month risk (95% CI)"
+  names(df_with_headers)[names(df_with_headers) == "rd_disp"]   <- " "
   
   return(df_with_headers)
 }
@@ -381,12 +382,12 @@ header_idx_od <- which(plot_data_od$is_header)
 p_od <- forest(
   plot_data_od[, c("Sensitivity Analysis", "Dose adjustment",
                    "Episodes at risk\nat reinitiation", risk_col_od,
-                   "Risk Difference (%) (95% CI)", " ")],
+                   " ", "% difference in 1-month risk (95% CI)")],
   est = plot_data_od$rd_pct, lower = plot_data_od$lci_pct, upper = plot_data_od$uci_pct,
   ci_column = 6,
   vert_line = c(-3, -2, -1, 1, 2, 3),
   ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
-  xlab = "Risk Difference (%)",
+  xlab = "Risk difference (%)",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
                        vertline_col = "grey50",
@@ -401,7 +402,8 @@ p_od <- edit_plot(p_od, row = header_idx_od, gp = gpar(fontface = "bold"))
 p_od <- edit_plot(p_od, col = 3, part = "body",   hjust = 0.5, x = unit(0.5, "npc"))
 p_od <- edit_plot(p_od, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
 p_od <- edit_plot(p_od, col = 4, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
-p_od <- edit_plot(p_od, col = 5, part = "header", hjust = 0.5, x = unit(0.6, "npc"))
+p_od <- edit_plot(p_od, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_od <- edit_plot(p_od, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
 
 
@@ -413,7 +415,7 @@ for (i in 1:nrow(plot_data_od)) {
 }
 
 jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR3_OD.jpg"),
-     width = 3500, height = 4800, res = 300)
+     width = 3600, height = 4800, res = 300)
 print(p_od)
 dev.off()
 
@@ -436,12 +438,12 @@ header_idx_dis <- which(plot_data_dis$is_header)
 p_dis <- forest(
   plot_data_dis[, c("Sensitivity Analysis", "Dose adjustment",
                     "Episodes at risk\nat reinitiation", risk_col_dis,
-                    "Risk Difference (%) (95% CI)", " ")],
+                    " ", "% difference in 12-month risk (95% CI)")],
   est = plot_data_dis$rd_pct, lower = plot_data_dis$lci_pct, upper = plot_data_dis$uci_pct,
   ci_column = 6,
-  vert_line = c(-30, -20, -10, 10, 20, 30),
-  ref_line = 0, xlim = c(-30.5, 30.5), ticks_at = c(-30, -20, -10, 0, 10, 20, 30),
-  xlab = "Risk Difference (%)",
+  vert_line = c(-20, -10, 10, 20),
+  ref_line = 0, xlim = c(-22, 22), ticks_at = c(-20, -10, 0, 10, 20),
+  xlab = "Risk difference (%)",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
                        vertline_col = "grey50",
@@ -456,7 +458,8 @@ p_dis <- edit_plot(p_dis, row = header_idx_dis, gp = gpar(fontface = "bold"))
 p_dis <- edit_plot(p_dis, col = 3, part = "body",   hjust = 0.5, x = unit(0.5, "npc"))
 p_dis <- edit_plot(p_dis, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
 p_dis <- edit_plot(p_dis, col = 4, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
-p_dis <- edit_plot(p_dis, col = 5, part = "header", hjust = 0.5, x = unit(0.6, "npc"))
+p_dis <- edit_plot(p_dis, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_dis <- edit_plot(p_dis, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
 
 for (i in 1:nrow(plot_data_dis)) {
@@ -467,39 +470,6 @@ for (i in 1:nrow(plot_data_dis)) {
 }
 
 jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR3_DIS.jpg"),
-     width = 3500, height = 4600, res = 300)
+     width = 3700, height = 4600, res = 300)
 print(p_dis)
 dev.off()
-
-# 5. DIAGNOSTIC PREVIEW --------------------------------------------------------
-cat("\n=== PER-SA MINIMUM ARM EVENT COUNT - Overdose (Trial 3) ===\n")
-plot_data_od %>%
-  filter(!is_header) %>%
-  group_by(`Sensitivity Analysis`) %>%
-  summarise(min_arm_events = min(min_arm_events, na.rm = TRUE),
-            .groups = "drop") %>%
-  arrange(min_arm_events) %>%
-  print(n = Inf)
-
-cat("\n=== PER-SA MINIMUM ARM EVENT COUNT - Discontinuation (Trial 3) ===\n")
-plot_data_dis %>%
-  filter(!is_header) %>%
-  group_by(`Sensitivity Analysis`) %>%
-  summarise(min_arm_events = min(min_arm_events, na.rm = TRUE),
-            .groups = "drop") %>%
-  arrange(min_arm_events) %>%
-  print(n = Inf)
-
-cat("\n=== SUPPRESSED SAs (Overdose, Trial 3) ===\n")
-plot_data_od %>%
-  filter(!is_header, `Risk Difference (%) (95% CI)` == "") %>%
-  distinct(`Sensitivity Analysis`, min_arm_events) %>%
-  print(n = Inf)
-
-cat("\n=== SUPPRESSED SAs (Discontinuation, Trial 3) ===\n")
-plot_data_dis %>%
-  filter(!is_header, `Risk Difference (%) (95% CI)` == "") %>%
-  distinct(`Sensitivity Analysis`, min_arm_events) %>%
-  print(n = Inf)
-
-cat("\n=== DONE ===\n")

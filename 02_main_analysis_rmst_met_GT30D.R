@@ -348,8 +348,6 @@ row_tr2_all <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 +
 row_tr2_all <- plot_spacer() + row_tr2_all + plot_layout(heights = c(0.05, 1))
 
 plot_tr2_all_final <- ggdraw(row_tr2_all) +
-  draw_label("A. Methadone interruption of 3-4 days",
-             x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
   draw_label("Note: SMD ≥ 0.1 included in outcome models.",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
@@ -453,8 +451,6 @@ row_tr3_all <- p_1 + plot_spacer() + p_2 + plot_spacer() + p_3 +
 row_tr3_all <- plot_spacer() + row_tr3_all + plot_layout(heights = c(0.05, 1))
 
 plot_tr3_all_final <- ggdraw(row_tr3_all) +
-  draw_label("B. Methadone interruption of 5-14 days",
-             x = 0.02, y = 0.99, hjust = 0, vjust = 1, size = 16, fontface = "bold") +
   draw_label("Note: SMD ≥ 0.1 included in outcome models",
              x = 0.5, y = 0.01, hjust = 0.5, vjust = 0, size = 11)
 
