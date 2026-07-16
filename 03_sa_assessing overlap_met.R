@@ -328,10 +328,145 @@ print(plot2)
 dev.off()
 
 
+# 5. PS MIRROR PLOT: LE30D vs GT30D ########
+
+library(tidyverse)
+
+# 1. Define colors 
+COMPARISON_COLORS <- c(
+  "No dose change"       = "#000000", 
+  "Dose increase"        = "#D62728",  
+  "1-<50% reduction"     = "#2CA02C",  
+  "≥50% reduction/≤40mg" = "#FF7F0E"  
+)
+
+# 2. Helper function to generate the plot
+build_mirror_ess_plot <- function(ps_obj) {
+  
+  # Format dataset labels
+  dat_plot <- ps_obj$data_weights %>%
+    mutate(
+      trt = recode(trt,
+                   "no reversion" = "No dose change",
+                   "1-<50%" = "1-<50% reduction",
+                   ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                   "increase" = "Dose increase"),
+      trt = factor(trt, levels = names(COMPARISON_COLORS))
+    )
+  
+  # Calculate ESS
+  ess_summary <- dat_plot %>%
+    group_by(trt) %>%
+    summarise(
+      raw_n = n(),
+      ess = (sum(wt_trunc))^2 / sum(wt_trunc^2),
+      ess_ow = (sum(ow_wt))^2 / sum(ow_wt^2),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      label_text = paste0("Original N = ", formatC(raw_n, format="f", digits=0, big.mark=","),
+                          "\nTruncated ESS = ", formatC(ess, format="f", digits=0, big.mark=","),
+                          "\nOW ESS = ", formatC(ess_ow, format="f", digits=0, big.mark=","))
+    )
+  
+  # Build Plot
+  p_mirror <- ggplot(dat_plot, aes(x = ps)) +
+    
+    # TOP HALF: Unweighted raw count
+    geom_histogram(aes(y = after_stat(count)), bins = 30, 
+                   fill = "grey70", color = "grey50", alpha = 0.8) +
+    
+    # BOTTOM HALF: Truncated weighted count
+    geom_histogram(aes(y = -after_stat(count), weight = wt_trunc, fill = trt), 
+                   bins = 30, color = "black", alpha = 0.8) +
+    
+    # Facet into 4 panels
+    facet_wrap(~ trt, scales = "free_y") +
+    
+    # Inject ESS text annotations
+    geom_text(data = ess_summary, 
+              aes(x = Inf, y = Inf, label = label_text),
+              hjust = 1.05, vjust = 1.5, size = 4.5, fontface = "bold", color = "black", inherit.aes = FALSE) +
+    
+    scale_y_continuous(labels = abs) +
+    scale_fill_manual(values = COMPARISON_COLORS) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
+    
+    # Titles removed, caption added for the note at the bottom
+    labs(
+      title = NULL,
+      subtitle = NULL,
+      x = "Estimated Propensity Score",
+      y = "Count / Weighted Count",
+      caption = "Note: Top (Grey) represents the unweighted sample size. Bottom (Colored) represents the weighted pseudo-population using truncated IPTW."
+    ) +
+    
+    theme_minimal(base_size = 14) +
+    theme(
+      legend.position = "none",
+      strip.background = element_rect(fill = "gray90", color = "black"),
+      strip.text = element_text(face = "bold", size = 12),
+      panel.grid.minor = element_blank(),
+      panel.grid = element_blank(), 
+      axis.line = element_line(color = "black"),
+      axis.ticks.length = unit(0.2, "cm"), 
+      axis.ticks.y = element_line(linewidth = 0.8, color = "black"),
+      axis.ticks.x = element_line(linewidth = 0.8, color = "black"),
+      axis.text.x = element_text(color = "black", size = 11),
+      axis.text.y = element_text(color = "black", size = 10),
+      # THE FIX: Explicitly call ggplot2::margin
+      plot.caption = element_text(hjust = 0, size = 12, color = "black", margin = ggplot2::margin(t = 15)) 
+    )
+  
+  return(p_mirror)
+}
+
+# 3. Load the model objects (if not already in environment)
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/" 
+ps_tr2_le30d <- readRDS(paste0(RES_DIR, "LE30D/PScore/ps_weight_tr2_34d_all.rds"))
+ps_tr2_gt30d <- readRDS(paste0(RES_DIR, "GT30D/PScore/ps_weight_tr2_34d_all.rds"))
+
+ps_tr3_le30d <- readRDS(paste0(RES_DIR, "LE30D/PScore/ps_weight_tr3_all.rds"))
+ps_tr3_gt30d <- readRDS(paste0(RES_DIR, "GT30D/PScore/ps_weight_tr3_all.rds"))
+
+# 4. Generate and save Trial 2 Plot (3-4 Days)
+p_tr2_le30d <- build_mirror_ess_plot(ps_tr2_le30d)
+
+jpeg(paste0(RES_DIR, "LE30D/Figures/Diag_TR2_Mirr_ESS_LE30D.jpg"), 
+     width = 3600, height = 2600, res = 300)
+print(p_tr2_le30d)
+dev.off()
+
+
+p_tr2_gt30d <- build_mirror_ess_plot(ps_tr2_gt30d)
+
+jpeg(paste0(RES_DIR, "GT30D/Figures/Diag_TR2_Mirr_ESS_GT30D.jpg"), 
+     width = 3600, height = 2600, res = 300)
+print(p_tr2_gt30d)
+dev.off()
+
+
+# 5. Generate and save Trial 3 Plot (5-14 Days)
+p_tr3_le30d <- build_mirror_ess_plot(ps_tr3_le30d)
+
+jpeg(paste0(RES_DIR, "LE30D/Figures/Diag_TR3_Mirr_ESS_LE30D.jpg"), 
+     width = 3600, height = 2600, res = 300)
+print(p_tr3_le30d)
+dev.off()
+
+
+p_tr3_gt30d <- build_mirror_ess_plot(ps_tr3_gt30d)
+
+jpeg(paste0(RES_DIR, "GT30D/Figures/Diag_TR3_Mirr_ESS_GT30D.jpg"), 
+     width = 3600, height = 2600, res = 300)
+print(p_tr3_gt30d)
+dev.off()
 
 
 
-# 3. PS plots: LE30D vs GT30D ############
+
+
+# 6. PS plots: LE30D vs GT30D ############
 
 
 library(tidyverse)
