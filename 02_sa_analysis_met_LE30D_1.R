@@ -117,7 +117,7 @@ run_sa_model <- function(base_dat, trial_name, sa_name, sa_params) {
   
   # Positivity & sample size safety check
   n_obs <- nrow(analytic_dat)
-  if(n_obs < 500) {
+  if(n_obs < 200) {
     warning(sprintf("Skipping %s for %s: Insufficient N (%d) - Positivity violation likely.", sa_name, trial_name, n_obs))
     return(NULL)
   }

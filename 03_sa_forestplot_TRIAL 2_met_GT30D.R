@@ -397,7 +397,7 @@ plot_data_dis <- build_wide_df(
   manifest    = sa_manifest_dis,
   outcome     = "dis",
   max_time    = 365,
-  min_events  = 5       # <-- tune: suppress SA if any arm has < this many discont events
+  min_events  = 1       # <-- tune: suppress SA if any arm has < this many discont events
 ) %>% filter(!grepl("Composite outcome", `Sensitivity Analysis`))
 
 bg_fill_dis <- plot_data_dis$bg_color
