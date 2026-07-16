@@ -199,8 +199,7 @@ build_pairwise_overlap_plot <- function(ps_obj) {
       title = NULL,
       subtitle = NULL,
       x = "Estimated Propensity Score for Adjustment Strategy",
-      y = "Density",
-      caption = "Note: Top (Colored) displays the density of the active dose adjustment strategy. Bottom (Black) displays the reference group."
+      y = "Density"
     ) +
     
     theme_minimal(base_size = 14) +
