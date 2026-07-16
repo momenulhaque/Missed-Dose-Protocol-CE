@@ -339,13 +339,15 @@ trt_colors_km <- c(
 
 # OVERDOSE: LE30D vs GT30D #########
 
+#  UNADJUSTED OVERDOSE KM CURVES
+#  4 separate figures: TR2 × {LE30D, GT30D} and TR3 × {LE30D, GT30D}
 library(tidyverse)
 library(survival)
 library(broom)
 library(patchwork)
 library(cowplot)
 
-# Color mapping (unchanged)
+# Color mapping
 trt_colors_km <- c(
   "No dose change"                 = "black",
   "<50% reduction"                 = "#2CA02C",
@@ -380,10 +382,9 @@ build_km_df <- function(dat, time_var = "time_od_acute", event_var = "sens_od_ac
   bind_rows(t0, fit_df) %>% arrange(trt_label, time)
 }
 
-# ---- HELPER: build event / at-risk table 
+# ---- HELPER: event / at-risk table 
 build_event_table <- function(dat, time_var = "time_od_acute",
-                              event_var = "sens_od_acute",
-                              y_title = "Number of events/episodes during follow-up") {
+                              event_var = "sens_od_acute") {
   dat <- dat %>%
     mutate(trt_label = recode(trt,
                               "no reversion"      = "No dose change",
@@ -422,21 +423,21 @@ build_event_table <- function(dat, time_var = "time_od_acute",
     mutate(trt_label = factor(trt_label, levels = rev(table_levels)))
   
   ggplot(table_df, aes(x = time, y = trt_label, label = label_text)) +
-    geom_text(size = 4.2, color = "black") +
+    geom_text(size = 4.5, color = "black") +
     scale_x_continuous(limits = c(0, 365), breaks = breaks_x) +
-    labs(x = NULL, y = NULL, title = y_title) +
-    theme_minimal(base_size = 13) +
+    labs(x = NULL, y = NULL, title = "Risk table") +
+    theme_minimal(base_size = 14) +
     theme(
       panel.grid   = element_blank(), axis.line = element_blank(),
       axis.ticks   = element_blank(), axis.text.x = element_blank(),
-      axis.text.y  = element_text(color = "black", size = 11),
-      plot.title   = element_text(size = 12, face = "plain"),
+      axis.title.y = element_text(color = "black", size = 13, angle = 90),
+      axis.text.y  = element_text(color = "black", size = 12),
       plot.margin  = ggplot2::margin(t = 0, r = 5, b = 5, l = 5, unit = "pt")
     )
 }
 
-# ---- HELPER: plot KM curve 
-plot_km_curve <- function(df, panel_title = NULL) {
+# ---- HELPER: KM curve 
+plot_km_curve <- function(df) {
   ggplot(df, aes(x = time, y = cum_inc, color = trt_label)) +
     geom_step(linewidth = 1) +
     geom_vline(xintercept = 30, linetype = "dashed",
@@ -446,32 +447,24 @@ plot_km_curve <- function(df, panel_title = NULL) {
     scale_y_continuous(labels = scales::percent_format(accuracy = 1),
                        limits = c(0, 0.8)) +
     scale_color_manual(values = trt_colors_km) +
-    labs(title = panel_title,
+    labs(title = NULL,
          x = "Days since time zero\n",
          y = "Unadjusted Cumulative Incidence (%)") +
-    theme_minimal(base_size = 13) +
+    theme_minimal(base_size = 14) +
     theme(
       panel.grid.minor  = element_blank(),
       axis.line         = element_line(color = "black"),
       axis.ticks        = element_line(color = "black", linewidth = 0.8),
       axis.ticks.length = unit(0.2, "cm"),
-      axis.text         = element_text(color = "black", size = 12),
-      plot.title        = element_text(size = 13, face = "bold", hjust = 0.5),
+      axis.text         = element_text(color = "black", size = 13),
       legend.position   = "none",
       plot.margin       = ggplot2::margin(t = 10, r = 5, b = 0, l = 5, unit = "pt")
     )
 }
 
-# ---- HELPER: assemble one-stratum panel (KM + table) 
-build_stratum_panel <- function(ps_obj, panel_title) {
-  df_km <- build_km_df(ps_obj$data_weights)
-  p_km  <- plot_km_curve(df_km, panel_title = panel_title)
-  p_tab <- build_event_table(ps_obj$data_weights)
-  p_km / p_tab + plot_layout(heights = c(5, 1.2))
-}
-
 #  1. LOAD PS OBJECTS FOR BOTH STRATA
 RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
+FIG_DIR <- paste0(RES_DIR, "LE30D/Figures/")
 
 ps_tr2_le30d <- readRDS(paste0(RES_DIR, "LE30D/PScore/ps_weight_tr2_34d_all.rds"))
 ps_tr2_gt30d <- readRDS(paste0(RES_DIR, "GT30D/PScore/ps_weight_tr2_34d_all.rds"))
@@ -479,51 +472,61 @@ ps_tr2_gt30d <- readRDS(paste0(RES_DIR, "GT30D/PScore/ps_weight_tr2_34d_all.rds"
 ps_tr3_le30d <- readRDS(paste0(RES_DIR, "LE30D/PScore/ps_weight_tr3_all.rds"))
 ps_tr3_gt30d <- readRDS(paste0(RES_DIR, "GT30D/PScore/ps_weight_tr3_all.rds"))
 
+#  2. BUILD KM DATA + TABLES + CURVES PER TRIAL × STRATUM
+# ---- TR2 × LE30D 
+df_km_tr2_le  <- build_km_df(ps_tr2_le30d$data_weights)
+p_km_tr2_le   <- plot_km_curve(df_km_tr2_le)
+p_tab_tr2_le  <- build_event_table(ps_tr2_le30d$data_weights)
 
-#  2. BUILD STRATIFIED PANELS
-panel_tr2_le <- build_stratum_panel(ps_tr2_le30d, "Episode duration before interruption: \u2264 30 days")
-panel_tr2_gt <- build_stratum_panel(ps_tr2_gt30d, "Episode duration before interruption: > 30 days")
+# ---- TR2 × GT30D 
+df_km_tr2_gt  <- build_km_df(ps_tr2_gt30d$data_weights)
+p_km_tr2_gt   <- plot_km_curve(df_km_tr2_gt)
+p_tab_tr2_gt  <- build_event_table(ps_tr2_gt30d$data_weights)
 
-panel_tr3_le <- build_stratum_panel(ps_tr3_le30d, "Episode duration before interruption: \u2264 30 days")
-panel_tr3_gt <- build_stratum_panel(ps_tr3_gt30d, "Episode duration before interruption: > 30 days")
+# ---- TR3 × LE30D 
+df_km_tr3_le  <- build_km_df(ps_tr3_le30d$data_weights)
+p_km_tr3_le   <- plot_km_curve(df_km_tr3_le)
+p_tab_tr3_le  <- build_event_table(ps_tr3_le30d$data_weights)
 
-# ---- Shared legend (from any KM plot with legend turned on) 
-dummy_km <- plot_km_curve(build_km_df(ps_tr2_le30d$data_weights)) +
+# ---- TR3 × GT30D 
+df_km_tr3_gt  <- build_km_df(ps_tr3_gt30d$data_weights)
+p_km_tr3_gt   <- plot_km_curve(df_km_tr3_gt)
+p_tab_tr3_gt  <- build_event_table(ps_tr3_gt30d$data_weights)
+
+# ---- Shared legend 
+dummy_plot <- p_km_tr2_le +
   theme(
     legend.position   = "bottom",
     legend.title      = element_blank(),
-    legend.text       = element_text(size = 12),
-    legend.key.width  = unit(1.8, "cm")
+    legend.text       = element_text(size = 13),
+    legend.key.width  = unit(2, "cm")
   )
-shared_legend <- cowplot::get_legend(dummy_km)
+shared_legend <- cowplot::get_legend(dummy_plot)
 
-
-#  3. COMPOSITE: SIDE-BY-SIDE STRATA + SHARED LEGEND
-
-build_stratified_composite <- function(panel_left, panel_right, shared_legend) {
-  top_row <- panel_left | panel_right                    # side-by-side
-  top_row / patchwork::wrap_elements(shared_legend) +
-    plot_layout(heights = c(10, 0.6))
+#  3. SAVE 4 SEPARATE JPEGS
+save_km_figure <- function(p_km, p_tab, shared_legend, out_path,
+                           width = 3200, height = 2200, res = 300) {
+  composite <- p_km / p_tab / shared_legend +
+    plot_layout(heights = c(5, 1.2, 0.5))
+  jpeg(out_path, width = width, height = height, res = res)
+  print(composite)
+  dev.off()
 }
 
-tr2_composite <- build_stratified_composite(panel_tr2_le, panel_tr2_gt, shared_legend)
-tr3_composite <- build_stratified_composite(panel_tr3_le, panel_tr3_gt, shared_legend)
+# ---- TR2 LE30D 
+save_km_figure(p_km_tr2_le,  p_tab_tr2_le,  shared_legend,
+               paste0(FIG_DIR, "eFigure4_Unadjusted_OD_KM_TR2_LE30D.jpg"))
 
+# ---- TR2 GT30D 
+save_km_figure(p_km_tr2_gt,  p_tab_tr2_gt,  shared_legend,
+               paste0(FIG_DIR, "eFigure4_Unadjusted_OD_KM_TR2_GT30D.jpg"))
 
-#  4. SAVE FIGURES
-FIG_DIR <- paste0(RES_DIR, "LE30D/Figures/")
-dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
+# ---- TR3 LE30D 
+save_km_figure(p_km_tr3_le,  p_tab_tr3_le,  shared_legend,
+               paste0(FIG_DIR, "eFigure4_Unadjusted_OD_KM_TR3_LE30D.jpg"))
 
-# TR2  (wider canvas to accommodate two panels)
-jpeg(paste0(FIG_DIR, "eFigure4_Unadjusted_OD_KM_TR2_Stratified.jpg"),
-     width = 4500, height = 2400, res = 300)
-print(tr2_composite)
-dev.off()
+# ---- TR3 GT30D 
+save_km_figure(p_km_tr3_gt,  p_tab_tr3_gt,  shared_legend,
+               paste0(FIG_DIR, "eFigure4_Unadjusted_OD_KM_TR3_GT30D.jpg"))
 
-# TR3
-jpeg(paste0(FIG_DIR, "eFigure4_Unadjusted_OD_KM_TR3_Stratified.jpg"),
-     width = 4500, height = 2400, res = 300)
-print(tr3_composite)
-dev.off()
-
-cat("\nStratified KM figures saved.\n")
+cat("\n\u2713 All four KM figures saved to:\n  ", FIG_DIR, "\n", sep = "")

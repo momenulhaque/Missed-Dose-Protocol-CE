@@ -1228,7 +1228,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 risk$tr2$od$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
-  covs = c("year", "ddose_prev", "prior_episode"), 
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"), 
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
   samples = 499, 
@@ -1240,7 +1240,7 @@ risk$tr2$od$curve <- predict_cuminc_rmst_fast(
 risk$tr2$od$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CI,
   cluster_var = "studyid_rev", 
   samples = 499, 
@@ -1258,7 +1258,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 risk$tr2$dis$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat,
   trt_var = "trt", 
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CURVE,
   cluster_var = "studyid_rev", 
   samples = 499, 
@@ -1270,7 +1270,7 @@ risk$tr2$dis$curve <- predict_cuminc_rmst_fast(
 risk$tr2$dis$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, 
   trt_var = "trt", 
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CI,
   cluster_var = "studyid_rev", 
   samples = 499, 
@@ -1302,7 +1302,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr3$od$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1310,7 +1310,7 @@ risk$tr3$od$curve <- predict_cuminc_rmst_fast(
 
 risk$tr3$od$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1324,7 +1324,7 @@ long_dat <- expand_person_period(ps_fit$data_weights,
 
 risk$tr3$dis$curve <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CURVE, cluster_var = "studyid_rev",
   samples = 499, conf_int = FALSE, ref_group = "no reversion",
   wt_type = "wt_trunc"
@@ -1332,7 +1332,7 @@ risk$tr3$dis$curve <- predict_cuminc_rmst_fast(
 
 risk$tr3$dis$ci <- predict_cuminc_rmst_fast(
   Dat_expanded = long_dat, trt_var = "trt",
-  covs = c("year", "ddose_prev", "prior_episode"),
+  covs = c("year", "ddose_prev", "prior_episode", "comsize", "n_pats"),
   horizons = HORIZONS_CI, cluster_var = "studyid_rev",
   samples = 499, conf_int = TRUE, ref_group = "no reversion",
   wt_type = "wt_trunc"
