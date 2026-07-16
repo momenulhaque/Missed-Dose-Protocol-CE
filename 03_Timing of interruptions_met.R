@@ -90,7 +90,7 @@ df_explore_first <- bind_rows(
                                                    "\u226550% increase"))
   )
 
-
+ 
 
 ## A. TIMING OF FIRST INTERRUPTION (ECDF) WITH ALIGNED TABLE ######
 
@@ -234,3 +234,26 @@ jpeg(paste0(RES_DIR, "Figures/June09/eFigure 3B Dose_adjustment_proportions_v1.j
      width = 5200, height = 2800, res = 400)
 print(plot_prop_first)
 dev.off()
+
+
+
+
+
+df_explore_first$ret_length
+
+
+
+df_explore_first %>% 
+  filter(ret_length <= 30) %>% 
+  group_by(Trial) %>% 
+  count(trt_detailed)
+
+581/(238+581)
+
+
+df_explore_first %>% 
+  filter(ret_length > 30) %>% 
+  group_by(Trial) %>% 
+  count(trt_detailed)
+
+72/(72+33)
