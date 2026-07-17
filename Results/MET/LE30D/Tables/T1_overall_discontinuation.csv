@@ -1,0 +1,7 @@
+Cohort,N_episodes,N_events,Cum_disc_12mo,RMST_days
+"TR2 (3-4 days, all)",4844,3413,72,166
+"TR2 (3-4 days, LE30D)",3691,2851,79,140
+"TR2 (3-4 days, GT30D)",1153,562,50,247
+"TR3 (5-14 days, all)",9328,6800,74.8,157
+"TR3 (5-14 days, LE30D)",6909,5427,80.3,135
+"TR3 (5-14 days, GT30D)",2419,1373,59,223
