@@ -1,0 +1,9 @@
+cohort,outcome,n_events,min_time,q05_time,median_time,events_day0,events_by_d5,events_by_d10,events_by_d14,events_by_d30
+TR2 LE30D,Discontinuation,2851,1,14,43,0,4,10,233,1113
+TR2 LE30D,Overdose,341,0,12,144,2,10,15,22,43
+TR2 GT30D,Discontinuation,562,14,16,94,0,0,0,19,106
+TR2 GT30D,Overdose,45,12,16.4,186,0,0,0,2,6
+TR3 LE30D,Discontinuation,5427,0,14,41,9,15,21,391,2154
+TR3 LE30D,Overdose,722,0,9,134,7,22,39,54,93
+TR3 GT30D,Discontinuation,1373,6,17,93,0,0,2,30,244
+TR3 GT30D,Overdose,107,0,8.900000000000002,156,1,4,6,10,16

@@ -105,22 +105,6 @@ clean_trt_all <- function(dat) {
 
 # 1. LOAD AND FILTER RAW SAS DATA #########
 
-# First-interruption-in-first-episode
-raw_first <- read_sas(file.path(DATA_DIR, "TT_analytic_incid_sens_nw_m.sas7bdat"))
-
-dat_tr2_first <- raw_first |>
-  filter(trial_gap %in% 3:4) |>
-  clean_trt() |>
-  filter(ret_length <= 30)
-
-dat_tr3_first <- raw_first |>
-  filter(trial_cat == "5-14") |>
-  clean_trt() |>
-  filter(ret_length <= 30)
-
-rm(raw_first); gc()
-
-# First-interruption-in-any-episode 
 raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
 
 dat_tr2_all <- raw_all |>

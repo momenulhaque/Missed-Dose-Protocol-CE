@@ -214,7 +214,7 @@ for(i in 1:nrow(plot_data_od)) {
 #                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
 #                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/Figure2_OD_RD.jpg"), width = 5800, height = 2500, res = 400)
+jpeg(paste0(RES_DIR_LE30D, "Figures/Figure2_OD_RD.jpg"), width = 5800, height = 2500, res = 400)
 p_2a
 dev.off()
 
@@ -243,13 +243,13 @@ plot_data_2b <- bind_rows(tr2_dis_rd_le30, tr2_dis_rd_gt30) %>%
     group = ifelse(duplicated(group), "", group),
     
     # Create the blank canvas column
-    `% Difference in 1-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
+    `% Difference in 12-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
   ) %>%
   rename(
     `Episode duration\nbefore interruption` = "group",
     `Dose adjustment\nafter interruption` = "trt_group",
     `Episode at risk\nat reinitiation, n` = "Episode",
-    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
+    `% risk at 12 month\n(95% CI)` = "abs_risk_disp",
     ` ` = "rd_disp" # This holds the text
   )
 
@@ -276,13 +276,13 @@ plot_data_3b <- bind_rows(tr3_dis_rd_le30, tr3_dis_rd_gt30) %>%
     group = ifelse(duplicated(group), "", group),
     
     # Create the blank canvas column
-    `% Difference in 1-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
+    `% Difference in 12-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
   ) %>%
   rename(
     `Episode duration\nbefore interruption` = "group",
     `Dose adjustment\nafter interruption` = "trt_group",
     `Episode at risk\nat reinitiation, n` = "Episode",
-    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
+    `% risk at 12 month\n(95% CI)` = "abs_risk_disp",
     ` ` = "rd_disp" # This holds the text
   )
 
@@ -293,7 +293,7 @@ plot_data_dis <- bind_rows(plot_data_2b, plot_data_3b)
 p_2b <- forest(
   plot_data_dis[, c("Interruption", "Episode duration\nbefore interruption", 
                     "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
-                    "% risk at 1 month\n(95% CI)", " ", "% Difference in 1-month Risk (95% CI)")],
+                    "% risk at 12 month\n(95% CI)", " ", "% Difference in 12-month Risk (95% CI)")],
   est = plot_data_dis$rd_pct, lower = plot_data_dis$rd_lower_pct, upper = plot_data_dis$rd_upper_pct,
   ci_column = 7, ref_line = 0, x_trans = "none", xlim = c(-15, 15), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
   xlab = "Risk difference (%)",
@@ -326,7 +326,7 @@ for(i in 1:nrow(plot_data_dis)) {
 #                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
 #                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2500, res = 400)
+jpeg(paste0(RES_DIR_LE30D, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2500, res = 400)
 p_2b
 dev.off()
 

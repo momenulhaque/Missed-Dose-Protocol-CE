@@ -43,7 +43,6 @@ clean_trt_5cat <- function(dat) {
     ungroup()
 }
 
-# 1. First-interruption-in-any-episode ############
 raw_all <- read_sas(file.path(DATA_DIR, "TT_analytic_prev_sens_nw_m.sas7bdat"))
 
 dat_tr2_first <- raw_all |>
@@ -91,8 +90,8 @@ df_explore_first <- bind_rows(
   )
 
  
-
-## A. TIMING OF FIRST INTERRUPTION (ECDF) WITH ALIGNED TABLE ######
+# July 21 version #####
+## A. TIMING OF FIRST INTERRUPTION (ECDF) WITH ALIGNED TABLE #####
 
 # 1. Create the base ECDF plot (Removing the x-axis title so it can move to the bottom table)
 plot_ecdf_base <- ggplot(df_explore_first, aes(x = ret_length, color = Trial)) +
