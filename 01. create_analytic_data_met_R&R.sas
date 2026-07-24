@@ -268,17 +268,10 @@ run;
 proc freq; table incar_grp_bl; run;
 
 
-
-*save cohort;
-data tmplib2.TT_cohort_m;
-set cohort2;
-run;
-
-
 /* part of SA */
 
 data tmplib2.TT_cohort_m;
-set tmplib2.TT_cohort_m;
+set cohort2;
 by studyid_rev;
 *end of episode+gap;
 if drug_end in ('M','MS','S') then dt_end_gap30=min(end_fu_dt, dt_end+30);
@@ -582,21 +575,21 @@ proc freq data=TT_analytic_m; table clin_size_b clin_size cci/missing; run;
 
 
 
-/*proc sql;*/
-/*create table gp_msp as*/
-/*select dat.studyid_rev, dat.time0, dat.prac_studyid_rev, */
-/*	count(distinct msp.servdt) as n_visits*/
-/*from tmplib1.TT_analytic_m1 as dat left join lib.msp (where=(clmspec in (0,21,87) and servdt>='1jan2009'd)) as msp*/
-/*on dat.studyid_rev=msp.studyid_rev and dat.time0-365<= msp.servdt <dat.time0*/
-/*group by dat.studyid_rev, dat.time0, dat.prac_studyid_rev; quit;*/
-/**/
-/*data tmplib.gp_msp_m; set gp_msp; run;*/
+proc sql;
+create table gp_msp as
+select dat.studyid_rev, dat.time0, dat.prac_studyid_rev, 
+	count(distinct msp.servdt) as n_visits
+from TT_analytic_m as dat left join lib.msp (where=(clmspec in (0,21,87) and servdt>='1jan2009'd)) as msp
+on dat.studyid_rev=msp.studyid_rev and dat.time0-365<= msp.servdt <dat.time0
+group by dat.studyid_rev, dat.time0, dat.prac_studyid_rev; quit;
+
+data tmplib2.gp_msp_m; set gp_msp; run;
 
 *find total # GP visits;
 proc sql;
 create table gp_msp_total as
 select studyid_rev, time0, sum(n_visits) as tot_visits, max(n_visits) as max_visits
-from tmplib.gp_msp_m group by studyid_rev, time0;
+from tmplib2.gp_msp_m group by studyid_rev, time0;
 quit;
 
 data gp_msp_total2;
@@ -608,11 +601,13 @@ else if max_visits>tot_visits/2 then phy_att=2;
 run;
 
 
-data TT_analytic_m;
-merge tmplib1.TT_analytic_m1 (in=a) gp_msp_total2;
+data tmplib2.TT_analytic_m;
+merge TT_analytic_m (in=a) gp_msp_total2;
 by studyid_rev time0;
 if a;
 run;
+
+
 
 
 /*#################
@@ -620,7 +615,7 @@ run;
 ################*/
 
 data TT_analytic_m;
-    set TT_analytic_m;
+    set tmplib2.TT_analytic_m;
     length trial_cat $10 trt_p1 trt_p2 trt_p3 trt_s456 $20;
 
 /*     Trial Category */
@@ -746,21 +741,9 @@ t_all_acute2=enddt_all_acute-time0;
 format enddt_discont enddt_od_acute enddt_all_acute date9.;
 run;
 
-*JM2: compare two versions;
-proc freq data=TT_analytic_m;
-table s_discont*s_discont2  s_od_acute*s_od_acute2 s_all_acute*s_all_acute2/missing;
-run;
-
-proc freq data=TT_analytic_m;
-table s_discont*s_discont_14  s_discont*s_discont_30/missing;
-run;
-
-proc means data=TT_analytic_m;
- var t_od_acute2 t_discont2 t_od_acute t_discont;
- run;
 
 
-data tmplib1.TT_analytic_m1;
+data TT_analytic_m;
 	set TT_analytic_m;
 	by studyid_rev episode myepisode;
 
@@ -785,31 +768,7 @@ data tmplib1.TT_analytic_m1;
 run;
 
 
-proc means data=tmplib1.TT_analytic_m1;
- var t_od_acute t_discont time_discont t_discont_30;
- run;
-
-
-
-/*
-Saving the whole data set
-*/
-
-data tmplib1.TT_analytic_all_m; set tmplib1.TT_analytic_m1; run;
-
-proc freq data=tmplib1.TT_analytic_all_m;
-where ddose ne . or predrug in ("M", "") and trial_cat="5-14";
-table trt_p3*trt_s456/missing;*missing in trt_p3 should be only due to "increase";
-run;
-
-
-proc freq data=tmplib1.TT_analytic_all_m;
-where ddose ne . or predrug in ("M", "") and trial_cat="4";
-table trt_p2*trt_s456/missing;*missing in trt_p2 should be only due to "increase";
-run;
-
-
-data tmplib1.TT_analytic_all_m; set tmplib1.TT_analytic_all_m;
+data TT_analytic_m; set TT_analytic_m;
 	if age_st < 30 then age_cat = '[-Inf,30)';
 	else if age_st < 40 then age_cat = '[30,40)';
 	else if age_st < 50 then age_cat = '[40,50)';
@@ -851,15 +810,15 @@ create table f_induction as
 select e.studyid_rev, e.episode, e.myepisode, e.time0,
 	min(p.f_maint_dt_end) format=date9. as f_induction_comp_dt, min(p.main_ddose) as maint_ddose,
 	min(p.maint_dur) as maint_dur, min(p.drug_maint) as drug_maint
-from tmplib1.TT_analytic_all_m as e left join maint_2wkdts_ed as p
+from TT_analytic_m as e left join maint_2wkdts_ed as p
 on e.studyid_rev=p.studyid_rev and (e.dt_start <= p.f_maint_dt_end <= e.time0) and p.drug_maint = "M"
 group by e.studyid_rev, e.episode, e.myepisode, e.time0;
 quit;
 
 
 
-data tmplib1.TT_analytic_alls_m;
-merge tmplib1.TT_analytic_all_m(in=a) f_induction;
+data tmplib3.TT_analytic_alls_m;
+merge TT_analytic_m(in=a) f_induction;
 by studyid_rev episode myepisode;
 if a; 
 induction = f_induction_comp_dt ne .;
@@ -868,7 +827,7 @@ run;
 
 
 data data_ms;
-set tmplib1.TT_analytic_alls_m;
+set tmplib3.TT_analytic_alls_m;
 by studyid_rev episode myepisode;
 
 s_od_death=(od_death_dt ne .);
@@ -898,7 +857,7 @@ if trial_gap <= 14;
 run;
 
 
-data tmplib1.TT_analytic_rprev_sens_nw_m;
+data tmplib3.TT_analytic_rprev_sens_nw_m;
 set data_ms;
  if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
 run;
@@ -906,7 +865,7 @@ run;
 
 
 data data_m1s;
-set tmplib1.TT_analytic_alls_m;
+set tmplib3.TT_analytic_alls_m;
 by studyid_rev episode;
 where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "M" and predrug in ("M", "") and ddose_rev ne .;
 if first.episode and trial_gap <= 14;
@@ -933,25 +892,22 @@ if t_od_death >= 365 then sens_od_death = 0;
 run;
 
 
-data tmplib1.TT_analytic_prev_sens_nw_m;
+data tmplib3.TT_analytic_prev_sens_nw_m;
 set data_m1s;
  if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
 run;
 
 
-data tmplib1.TT_analytic_incid_sens_nw_m;
-set tmplib1.TT_analytic_prev_sens_m;
+data tmplib3.TT_analytic_incid_sens_nw_m;
+set tmplib3.TT_analytic_prev_sens_nw_m;
 if episode = 1;
 run;
 
-
-
-
  
 proc sql;
-create table tmplib2.TT_analytic_prev_cl_sens_nw_m as
+create table tmplib3.TT_analytic_prev_cl_sens_nw_m as
 select a.*, b.com, b.comsize, b.n_pracs, b.n_pats 
-from tmplib2.TT_analytic_prev_sens_nw_m a left join der.prov_clinics_v2 b
+from tmplib3.TT_analytic_prev_sens_nw_m a left join der.prov_clinics_v2 b
 on year(a.time0)=b.year and month(a.time0)=b.month and a.prac_studyid_rev=b.prac_studyid_rev
 order by a.studyid_rev, a.time0;
 quit; 
