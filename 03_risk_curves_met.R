@@ -346,7 +346,7 @@ save_curve_figure <- function(p_curve, p_table, shared_legend, out_path,
 }
 
 ## 4. BUILD DATA + CURVES + TABLES FOR ALL 8 FIGURES --------------------------
-# ---- OVERDOSE ----
+### ---- OVERDOSE ----
 df_od_tr2_le  <- prep_adj_curve(risk_tr2_le30d$od$curve)
 df_od_tr2_gt  <- prep_adj_curve(risk_tr2_gt30d$od$curve)
 df_od_tr3_le  <- prep_adj_curve(risk_tr3_le30d$od$curve)
@@ -362,7 +362,7 @@ t_od_tr2_gt   <- build_at_risk_table(dat_tr2_gt30d, "time_od_acute")
 t_od_tr3_le   <- build_at_risk_table(dat_tr3_le30d, "time_od_acute")
 t_od_tr3_gt   <- build_at_risk_table(dat_tr3_gt30d, "time_od_acute")
 
-# ---- DISCONTINUATION ----
+### ---- DISCONTINUATION ----
 df_dis_tr2_le <- prep_adj_curve(risk_tr2_le30d$dis$curve)
 df_dis_tr2_gt <- prep_adj_curve(risk_tr2_gt30d$dis$curve)
 df_dis_tr3_le <- prep_adj_curve(risk_tr3_le30d$dis$curve)
@@ -379,7 +379,7 @@ t_dis_tr2_gt  <- build_at_risk_table(dat_tr2_gt30d, "time_discont")
 t_dis_tr3_le  <- build_at_risk_table(dat_tr3_le30d, "time_discont")
 t_dis_tr3_gt  <- build_at_risk_table(dat_tr3_gt30d, "time_discont")
 
-# ---- Shared legend (from any curve) ----
+### ---- Shared legend (from any curve) ----
 shared_legend <- get_legend(
   p_od_tr2_le +
     theme(legend.position   = "bottom",
@@ -411,3 +411,1083 @@ save_curve_figure(p_dis_tr3_gt, t_dis_tr3_gt, shared_legend,
 
 cat("\n\u2713 All eight adjusted risk-curve figures saved to:\n  ", FIG_DIR, "\n", sep = "")
 
+
+
+# COMBINED ADJUSTED RISK CURVES: LE30D vs GT30D ############
+#
+# Creates two JPEG figures:
+#   1. Adjusted_Risk_OD_Combined.jpg
+#   2. Adjusted_Risk_Discont_Combined.jpg
+#
+# Each figure contains four panels:
+#   Top-left:     3-4-day interruption, within <=30 days of OAT initiation
+#   Top-right:    3-4-day interruption, after >30 days of OAT initiation
+#   Bottom-left:  5-14-day interruption, within <=30 days of OAT initiation
+#   Bottom-right: 5-14-day interruption, after >30 days of OAT initiation
+#
+# Each panel includes:
+#   - Adjusted cumulative-incidence curve
+#   - Number-of-episodes-at-risk table
+#
+# Final combination uses cowplot::plot_grid() to avoid nested-patchwork
+# wrap_dims() errors.
+
+library(tidyverse)
+library(patchwork)
+library(cowplot)
+library(grid)
+
+
+## 1. SETUP AND DATA LOADING ########
+
+
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
+FIG_DIR <- paste0(RES_DIR, "LE30D/Figures/")
+
+dir.create(
+  FIG_DIR,
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+
+
+# Adjusted-risk objects
+risk_tr2_le30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "LE30D/Risk/risk_tr2.rds"
+  )
+)
+
+risk_tr2_gt30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "GT30D/Risk/risk_tr2.rds"
+  )
+)
+
+risk_tr3_le30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "LE30D/Risk/risk_tr3.rds"
+  )
+)
+
+risk_tr3_gt30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "GT30D/Risk/risk_tr3.rds"
+  )
+)
+
+
+# PS-weighted data objects used for number-at-risk tables
+dat_tr2_le30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "LE30D/PScore/ps_weight_tr2_34d_all.rds"
+  )
+)
+
+dat_tr2_gt30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "GT30D/PScore/ps_weight_tr2_34d_all.rds"
+  )
+)
+
+dat_tr3_le30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "LE30D/PScore/ps_weight_tr3_all.rds"
+  )
+)
+
+dat_tr3_gt30d <- readRDS(
+  paste0(
+    RES_DIR,
+    "GT30D/PScore/ps_weight_tr3_all.rds"
+  )
+)
+
+
+## 2. SHARED SETTINGS ##########
+
+TRT_LEVELS <- c(
+  "no reversion",
+  "1-<50%",
+  ">=50%/<=40mg",
+  "increase"
+)
+
+TRT_LABELS <- c(
+  "No dose change",
+  "<50% reduction",
+  "\u226550% reduction/\u226440mg",
+  "Dose increase"
+)
+
+trt_colors_km <- c(
+  "No dose change"                 = "#000000",
+  "<50% reduction"                 = "#2CA02C",
+  "\u226550% reduction/\u226440mg" = "#FF7F0E",
+  "Dose increase"                  = "#D62728"
+)
+
+breaks_x <- c(
+  0,
+  30,
+  90,
+  180,
+  270,
+  365
+)
+
+# Shared y-axis for overdose and discontinuation
+Y_MAX <- 0.62
+
+Y_BREAKS <- seq(
+  from = 0,
+  to = Y_MAX,
+  by = 0.10
+)
+
+
+## 3. PREPARE ADJUSTED CURVE DATA ############
+
+prep_adj_curve <- function(risk_obj) {
+  
+  if (is.null(risk_obj) || is.null(risk_obj$risks)) {
+    stop(
+      "The supplied risk object does not contain a $risks element."
+    )
+  }
+  
+  required_vars <- c(
+    "horizon",
+    "risk",
+    "trt"
+  )
+  
+  missing_vars <- setdiff(
+    required_vars,
+    names(risk_obj$risks)
+  )
+  
+  if (length(missing_vars) > 0) {
+    stop(
+      "Missing variable(s) in risk_obj$risks: ",
+      paste(
+        missing_vars,
+        collapse = ", "
+      )
+    )
+  }
+  
+  curve_df <- risk_obj$risks %>%
+    transmute(
+      horizon = as.numeric(horizon),
+      
+      risk = as.numeric(risk),
+      
+      trt_label = recode(
+        as.character(trt),
+        
+        "no reversion" =
+          "No dose change",
+        
+        "1-<50%" =
+          "<50% reduction",
+        
+        ">=50%/<=40mg" =
+          "\u226550% reduction/\u226440mg",
+        
+        "increase" =
+          "Dose increase",
+        
+        .default = NA_character_
+      ),
+      
+      trt_label = factor(
+        trt_label,
+        levels = TRT_LABELS
+      )
+    ) %>%
+    filter(
+      !is.na(horizon),
+      !is.na(risk),
+      !is.na(trt_label)
+    )
+  
+  # Add a day-zero anchor only for strategies that do not already have one.
+  groups_with_day0 <- curve_df %>%
+    filter(
+      horizon == 0
+    ) %>%
+    pull(
+      trt_label
+    ) %>%
+    as.character() %>%
+    unique()
+  
+  groups_without_day0 <- setdiff(
+    TRT_LABELS,
+    groups_with_day0
+  )
+  
+  day0_rows <- tibble(
+    horizon = 0,
+    
+    risk = 0,
+    
+    trt_label = factor(
+      groups_without_day0,
+      levels = TRT_LABELS
+    )
+  )
+  
+  bind_rows(
+    curve_df,
+    day0_rows
+  ) %>%
+    distinct(
+      trt_label,
+      horizon,
+      .keep_all = TRUE
+    ) %>%
+    arrange(
+      trt_label,
+      horizon
+    )
+}
+
+
+## 4. PREPARE NUMBER-AT-RISK TABLE ######
+
+build_at_risk_table <- function(
+    dat,
+    time_var,
+    show_strategy_names = TRUE,
+    show_table_title = TRUE
+) {
+  
+  dat_clean <- if (
+    is.list(dat) &&
+    "data_weights" %in% names(dat)
+  ) {
+    dat$data_weights
+  } else {
+    dat
+  }
+  
+  required_vars <- c(
+    "trt",
+    time_var
+  )
+  
+  missing_vars <- setdiff(
+    required_vars,
+    names(dat_clean)
+  )
+  
+  if (length(missing_vars) > 0) {
+    stop(
+      "Missing variable(s) for risk table: ",
+      paste(missing_vars, collapse = ", ")
+    )
+  }
+  
+  dat_clean <- dat_clean %>%
+    filter(
+      !is.na(trt),
+      !is.na(.data[[time_var]])
+    ) %>%
+    mutate(
+      trt_label = recode(
+        as.character(trt),
+        "no reversion"     = "No dose change",
+        "1-<50%"           = "<50% reduction",
+        ">=50%/<=40mg"     = "\u226550% reduction/\u226440mg",
+        "increase"         = "Dose increase",
+        .default           = NA_character_
+      ),
+      trt_label = factor(
+        trt_label,
+        levels = TRT_LABELS
+      )
+    ) %>%
+    filter(
+      !is.na(trt_label)
+    )
+  
+  arm_counts <- purrr::map_dfr(
+    breaks_x,
+    function(t) {
+      
+      dat_clean %>%
+        group_by(trt_label) %>%
+        summarise(
+          time = t,
+          raw_count = if (t == 0) {
+            dplyr::n()
+          } else {
+            sum(
+              .data[[time_var]] >= t,
+              na.rm = TRUE
+            )
+          },
+          .groups = "drop"
+        )
+    }
+  )
+  
+  total_counts <- purrr::map_dfr(
+    breaks_x,
+    function(t) {
+      
+      tibble(
+        trt_label = "Total episodes",
+        time = t,
+        raw_count = if (t == 0) {
+          nrow(dat_clean)
+        } else {
+          sum(
+            dat_clean[[time_var]] >= t,
+            na.rm = TRUE
+          )
+        }
+      )
+    }
+  )
+  
+  table_levels <- c(
+    TRT_LABELS,
+    "Total episodes"
+  )
+  
+  at_risk_df <- bind_rows(
+    arm_counts,
+    total_counts
+  ) %>%
+    mutate(
+      trt_label = factor(
+        as.character(trt_label),
+        levels = rev(table_levels)
+      ),
+      
+      label_text = case_when(
+        is.na(raw_count)              ~ "",
+        raw_count == 0                ~ "0",
+        raw_count > 0 & raw_count < 10 ~ "<10",
+        TRUE                          ~ scales::comma(raw_count)
+      ),
+      
+      total_row =
+        as.character(trt_label) == "Total episodes"
+    )
+  
+  ggplot(
+    at_risk_df,
+    aes(
+      x = time,
+      y = trt_label,
+      label = label_text
+    )
+  ) +
+    geom_text(
+      aes(
+        fontface = ifelse(
+          total_row,
+          "bold",
+          "plain"
+        )
+      ),
+      size = TABLE_VALUE_SIZE,
+      family = FIG_FONT_FAMILY,
+      color = "black",
+      show.legend = FALSE
+    ) +
+    scale_x_continuous(
+      limits = c(-18, 383),
+      breaks = breaks_x,
+      expand = expansion(mult = c(0, 0))
+    ) +
+    scale_y_discrete(
+      drop = FALSE,
+      expand = expansion(
+        mult = c(0.008, 0.008)
+      )
+    ) +
+    coord_cartesian(
+      clip = "off"
+    ) +
+    labs(
+      x = NULL,
+      y = NULL,
+      title = if (show_table_title) {
+        "Number of episodes at risk during follow-up"
+      } else {
+        NULL
+      }
+    ) +
+    theme_minimal(
+      base_size = 12,
+      base_family = FIG_FONT_FAMILY
+    ) +
+    theme(
+      panel.grid = element_blank(),
+      axis.line = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      
+      axis.text.y = if (show_strategy_names) {
+        element_text(
+          color = "black",
+          size = TABLE_LABEL_SIZE,
+          family = FIG_FONT_FAMILY,
+          margin = ggplot2::margin(r = 5)
+        )
+      } else {
+        element_blank()
+      },
+      
+      plot.title = element_text(
+        color = "black",
+        size = TABLE_TITLE_SIZE,
+        face = "bold",
+        family = FIG_FONT_FAMILY,
+        hjust = 0,
+        margin = ggplot2::margin(
+          t = 0,
+          r = 0,
+          b = 10,
+          l = 0,
+          unit = "pt"
+        )
+      ),
+      
+      plot.margin = ggplot2::margin(
+        t = 0,
+        r = 20,
+        b = 0,
+        l = if (show_strategy_names) 20 else 10,
+        unit = "pt"
+      )
+    )
+}
+
+
+## 5. ADJUSTED CURVE PLOT ############
+
+plot_adj_curve <- function(
+    df,
+    y_max = Y_MAX,
+    show_30d_line = TRUE,
+    y_lab = "Adjusted risk (%)",
+    title_nm = NULL
+) {
+  
+  p <- ggplot(
+    df,
+    aes(
+      x = horizon,
+      y = risk,
+      color = trt_label,
+      group = trt_label
+    )
+  ) +
+    geom_line(
+      linewidth = CURVE_LINE_WIDTH,
+      lineend = "round",
+      linejoin = "round",
+      na.rm = TRUE
+    ) +
+    scale_x_continuous(
+      limits = c(-18, 383),
+      breaks = breaks_x,
+      expand = expansion(mult = c(0, 0))
+    ) +
+    scale_y_continuous(
+      labels = scales::percent_format(
+        accuracy = 1
+      ),
+      limits = c(0, y_max),
+      breaks = seq(
+        from = 0,
+        to = y_max,
+        by = 0.10
+      ),
+      expand = expansion(
+        mult = c(0, 0.02)
+      )
+    ) +
+    scale_color_manual(
+      values = trt_colors_km,
+      breaks = TRT_LABELS,
+      limits = TRT_LABELS,
+      drop = FALSE
+    ) +
+    coord_cartesian(
+      clip = "off"
+    ) +
+    labs(
+      title = title_nm,
+      x = "Days since time zero",
+      y = y_lab,
+      color = NULL
+    ) +
+    theme_minimal(
+      base_size = 15,
+      base_family = FIG_FONT_FAMILY
+    ) +
+    theme(
+      plot.background = element_rect(
+        fill = "white",
+        color = NA
+      ),
+      
+      panel.background = element_rect(
+        fill = "white",
+        color = NA
+      ),
+      
+      panel.grid.minor = element_blank(),
+      
+      panel.grid.major.x = element_line(
+        color = "grey90",
+        linewidth = GRID_LINE_WIDTH
+      ),
+      
+      panel.grid.major.y = element_line(
+        color = "grey90",
+        linewidth = GRID_LINE_WIDTH
+      ),
+      
+      axis.line = element_line(
+        color = "black",
+        linewidth = AXIS_LINE_WIDTH
+      ),
+      
+      axis.ticks = element_line(
+        color = "black",
+        linewidth = AXIS_LINE_WIDTH
+      ),
+      
+      axis.ticks.length = grid::unit(
+        0.20,
+        "cm"
+      ),
+      
+      axis.text = element_text(
+        color = "black",
+        size = AXIS_TEXT_SIZE,
+        family = FIG_FONT_FAMILY
+      ),
+      
+      axis.title.x = element_text(
+        color = "black",
+        size = AXIS_TITLE_SIZE,
+        face = "plain",
+        family = FIG_FONT_FAMILY,
+        margin = ggplot2::margin(t = 8)
+      ),
+      
+      axis.title.y = element_text(
+        color = "black",
+        size = AXIS_TITLE_SIZE,
+        face = "plain",
+        family = FIG_FONT_FAMILY,
+        margin = ggplot2::margin(r = 8)
+      ),
+      
+      plot.title = element_text(
+        color = "black",
+        size = PANEL_TITLE_SIZE,
+        face = "bold",
+        family = FIG_FONT_FAMILY,
+        hjust = 0.5,
+        lineheight = 1.05,
+        margin = ggplot2::margin(
+          t = 2,
+          r = 0,
+          b = 9,
+          l = 0,
+          unit = "pt"
+        )
+      ),
+      
+      legend.position = "none",
+      
+      plot.margin = ggplot2::margin(
+        t = 12,
+        r = 20,
+        b = 0,
+        l = 20,
+        unit = "pt"
+      )
+    )
+  
+  if (show_30d_line) {
+    p <- p +
+      geom_vline(
+        xintercept = 30,
+        linetype = "dashed",
+        color = "grey50",
+        linewidth = REF_LINE_WIDTH
+      )
+  }
+  
+  p
+}
+
+
+
+
+## 6. PREPARE CURVE DATA #########
+
+# Overdose
+df_od_tr2_le <- prep_adj_curve(
+  risk_tr2_le30d$od$curve
+)
+
+df_od_tr2_gt <- prep_adj_curve(
+  risk_tr2_gt30d$od$curve
+)
+
+df_od_tr3_le <- prep_adj_curve(
+  risk_tr3_le30d$od$curve
+)
+
+df_od_tr3_gt <- prep_adj_curve(
+  risk_tr3_gt30d$od$curve
+)
+
+
+# Discontinuation
+df_dis_tr2_le <- prep_adj_curve(
+  risk_tr2_le30d$dis$curve
+)
+
+df_dis_tr2_gt <- prep_adj_curve(
+  risk_tr2_gt30d$dis$curve
+)
+
+df_dis_tr3_le <- prep_adj_curve(
+  risk_tr3_le30d$dis$curve
+)
+
+df_dis_tr3_gt <- prep_adj_curve(
+  risk_tr3_gt30d$dis$curve
+)
+
+
+## 7. BUILD OVERDOSE CURVES ###########
+
+p_od_tr2_le <- plot_adj_curve(
+  df = df_od_tr2_le,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = TRUE,
+  
+  y_lab = "Adjusted risk (%)",
+  
+  title_nm =
+    "Interruption of 3-4 days within 30 days of OAT"
+)
+
+p_od_tr2_gt <- plot_adj_curve(
+  df = df_od_tr2_gt,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = TRUE,
+  
+  y_lab = NULL,
+  
+  title_nm =
+    "Interruption of 3-4 days after 30 days of OAT"
+)
+
+p_od_tr3_le <- plot_adj_curve(
+  df = df_od_tr3_le,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = TRUE,
+  
+  y_lab = "Adjusted risk (%)",
+  
+  title_nm =
+    "Interruption of 5-14 days within 30 days of OAT"
+)
+
+p_od_tr3_gt <- plot_adj_curve(
+  df = df_od_tr3_gt,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = TRUE,
+  
+  y_lab = NULL,
+  
+  title_nm =
+    "Interruption of 5-14 days after 30 days of OAT"
+)
+
+
+## 8. BUILD OVERDOSE RISK TABLES ##########
+
+# Strategy names and table title appear only in the left panel of each row.
+
+t_od_tr2_le <- build_at_risk_table(
+  dat = dat_tr2_le30d,
+  
+  time_var = "time_od_acute",
+  
+  show_strategy_names = TRUE,
+  
+  show_table_title = TRUE
+)
+
+t_od_tr2_gt <- build_at_risk_table(
+  dat = dat_tr2_gt30d,
+  
+  time_var = "time_od_acute",
+  
+  show_strategy_names = FALSE,
+  
+  show_table_title = FALSE
+)
+
+t_od_tr3_le <- build_at_risk_table(
+  dat = dat_tr3_le30d,
+  
+  time_var = "time_od_acute",
+  
+  show_strategy_names = TRUE,
+  
+  show_table_title = TRUE
+)
+
+t_od_tr3_gt <- build_at_risk_table(
+  dat = dat_tr3_gt30d,
+  
+  time_var = "time_od_acute",
+  
+  show_strategy_names = FALSE,
+  
+  show_table_title = FALSE
+)
+
+
+## 9. BUILD DISCONTINUATION CURVES #############
+
+p_dis_tr2_le <- plot_adj_curve(
+  df = df_dis_tr2_le,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = FALSE,
+  
+  y_lab = "Adjusted risk (%)",
+  
+  title_nm =
+    "Interruption of 3-4 days within 30 days of OAT"
+)
+
+p_dis_tr2_gt <- plot_adj_curve(
+  df = df_dis_tr2_gt,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = FALSE,
+  
+  y_lab = NULL,
+  
+  title_nm =
+    "Interruption of 3-4 days after 30 days of OAT"
+)
+
+p_dis_tr3_le <- plot_adj_curve(
+  df = df_dis_tr3_le,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = FALSE,
+  
+  y_lab = "Adjusted risk (%)",
+  
+  title_nm =
+    "Interruption of 5-14 days within 30 days of OAT"
+)
+
+p_dis_tr3_gt <- plot_adj_curve(
+  df = df_dis_tr3_gt,
+  
+  y_max = Y_MAX,
+  
+  show_30d_line = FALSE,
+  
+  y_lab = NULL,
+  
+  title_nm =
+    "Interruption of 5-14 days after 30 days of OAT"
+)
+
+
+## 10. BUILD DISCONTINUATION RISK TABLES #############
+
+t_dis_tr2_le <- build_at_risk_table(
+  dat = dat_tr2_le30d,
+  
+  time_var = "time_discont",
+  
+  show_strategy_names = TRUE,
+  
+  show_table_title = TRUE
+)
+
+t_dis_tr2_gt <- build_at_risk_table(
+  dat = dat_tr2_gt30d,
+  
+  time_var = "time_discont",
+  
+  show_strategy_names = FALSE,
+  
+  show_table_title = FALSE
+)
+
+t_dis_tr3_le <- build_at_risk_table(
+  dat = dat_tr3_le30d,
+  
+  time_var = "time_discont",
+  
+  show_strategy_names = TRUE,
+  
+  show_table_title = TRUE
+)
+
+t_dis_tr3_gt <- build_at_risk_table(
+  dat = dat_tr3_gt30d,
+  
+  time_var = "time_discont",
+  
+  show_strategy_names = FALSE,
+  
+  show_table_title = FALSE
+)
+
+## 11. CREATE ONE SHARED LEGEND ########
+
+legend_plot <- ggplot(
+  df_od_tr2_le,
+  aes(
+    x = horizon,
+    y = risk,
+    color = trt_label,
+    group = trt_label
+  )
+) +
+  geom_line(
+    linewidth = CURVE_LINE_WIDTH,
+    lineend = "round"
+  ) +
+  scale_color_manual(
+    values = trt_colors_km,
+    breaks = TRT_LABELS,
+    limits = TRT_LABELS,
+    drop = FALSE
+  ) +
+  labs(
+    color = NULL
+  ) +
+  theme_void(
+    base_family = FIG_FONT_FAMILY
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "center",
+    legend.box = "horizontal",
+    legend.title = element_blank(),
+    
+    legend.text = element_text(
+      color = "black",
+      size = LEGEND_TEXT_SIZE,
+      family = FIG_FONT_FAMILY
+    ),
+    
+    legend.key.width = grid::unit(
+      2.4,
+      "cm"
+    ),
+    
+    legend.key.height = grid::unit(
+      0.45,
+      "cm"
+    ),
+    
+    legend.spacing.x = grid::unit(
+      0.35,
+      "cm"
+    ),
+    
+    legend.margin = ggplot2::margin(
+      t = 5,
+      r = 0,
+      b = 0,
+      l = 0,
+      unit = "pt"
+    )
+  )
+
+shared_legend <- cowplot::get_legend(
+  legend_plot
+)
+
+
+
+## 12. BUILD ONE CURVE-TABLE PANEL ###########
+
+build_curve_table_panel <- function(
+    p_curve,
+    p_table,
+    spacer_height = CURVE_TABLE_SPACER
+) {
+  
+  p_spacer <- ggplot() +
+    theme_void() +
+    theme(
+      plot.margin = ggplot2::margin(
+        t = 0,
+        r = 0,
+        b = 0,
+        l = 0,
+        unit = "pt"
+      )
+    )
+  
+  patchwork::wrap_plots(
+    list(
+      p_curve,
+      p_spacer,
+      p_table
+    ),
+    ncol = 1,
+    heights = c(
+      5.15,
+      spacer_height,
+      1.25
+    )
+  )
+}
+
+
+### REBUILD OVERDOSE CURVE-TABLE PANELS ###########
+
+panel_od_tr2_le <- build_curve_table_panel(
+  p_curve = p_od_tr2_le,
+  p_table = t_od_tr2_le,
+  spacer_height = 0.18
+)
+
+panel_od_tr2_gt <- build_curve_table_panel(
+  p_curve = p_od_tr2_gt,
+  p_table = t_od_tr2_gt,
+  spacer_height = 0.18
+)
+
+panel_od_tr3_le <- build_curve_table_panel(
+  p_curve = p_od_tr3_le,
+  p_table = t_od_tr3_le,
+  spacer_height = 0.18
+)
+
+panel_od_tr3_gt <- build_curve_table_panel(
+  p_curve = p_od_tr3_gt,
+  p_table = t_od_tr3_gt,
+  spacer_height = 0.18
+)
+
+
+### REBUILD DISCONTINUATION CURVE-TABLE PANELS #######
+
+panel_dis_tr2_le <- build_curve_table_panel(
+  p_curve = p_dis_tr2_le,
+  p_table = t_dis_tr2_le,
+  spacer_height = 0.18
+)
+
+panel_dis_tr2_gt <- build_curve_table_panel(
+  p_curve = p_dis_tr2_gt,
+  p_table = t_dis_tr2_gt,
+  spacer_height = 0.18
+)
+
+panel_dis_tr3_le <- build_curve_table_panel(
+  p_curve = p_dis_tr3_le,
+  p_table = t_dis_tr3_le,
+  spacer_height = 0.18
+)
+
+panel_dis_tr3_gt <- build_curve_table_panel(
+  p_curve = p_dis_tr3_gt,
+  p_table = t_dis_tr3_gt,
+  spacer_height = 0.18
+)
+
+
+
+
+
+### REBUILD COMBINED FIGURES ########
+
+od_combined <- build_combined_figure(
+  panel1 = panel_od_tr2_le,
+  panel2 = panel_od_tr2_gt,
+  panel3 = panel_od_tr3_le,
+  panel4 = panel_od_tr3_gt,
+  shared_legend = shared_legend
+)
+
+dis_combined <- build_combined_figure(
+  panel1 = panel_dis_tr2_le,
+  panel2 = panel_dis_tr2_gt,
+  panel3 = panel_dis_tr3_le,
+  panel4 = panel_dis_tr3_gt,
+  shared_legend = shared_legend
+)
+
+
+
+
+### SAVE HIGH-RESOLUTION JPEG FILES ##########
+
+jpeg(
+  filename = OD_FILE,
+  width = 11200,
+  height = 8600,
+  res = 600,
+  quality = 100,
+  bg = "white"
+)
+
+print(od_combined)
+
+dev.off()
+
+
+jpeg(
+  filename = DIS_FILE,
+  width = 11200,
+  height = 8600,
+  res = 600,
+  quality = 100,
+  bg = "white"
+)
+
+print(dis_combined)
+
+dev.off()
