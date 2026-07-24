@@ -364,13 +364,9 @@ t_od_tr3_gt   <- build_at_risk_table(dat_tr3_gt30d, "time_od_acute")
 
 # ---- DISCONTINUATION ----
 df_dis_tr2_le <- prep_adj_curve(risk_tr2_le30d$dis$curve)
-df_dis_tr2_le[df_dis_tr2_le$horizon == 14, ]$risk = 0
 df_dis_tr2_gt <- prep_adj_curve(risk_tr2_gt30d$dis$curve)
-df_dis_tr2_gt[df_dis_tr2_gt$horizon == 14, ]$risk = 0
 df_dis_tr3_le <- prep_adj_curve(risk_tr3_le30d$dis$curve)
-df_dis_tr3_le[df_dis_tr3_le$horizon == 14, ]$risk = 0
 df_dis_tr3_gt <- prep_adj_curve(risk_tr3_gt30d$dis$curve)
-df_dis_tr3_gt[df_dis_tr3_gt$horizon == 14, ]$risk = 0
 
 
 p_dis_tr2_le  <- plot_adj_curve(df_dis_tr2_le, y_max = 0.9, show_30d_line = FALSE, y_lab = "Adjusted risk (%)")
