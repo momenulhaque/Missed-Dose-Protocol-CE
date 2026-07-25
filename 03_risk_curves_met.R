@@ -1467,10 +1467,10 @@ dis_combined <- build_combined_figure(
 
 jpeg(
   filename = OD_FILE,
-  width = 11200,
-  height = 8600,
-  res = 600,
-  quality = 100,
+  width = 5500,
+  height = 4000,
+  res = 300,
+  quality = 75,
   bg = "white"
 )
 
@@ -1481,10 +1481,10 @@ dev.off()
 
 jpeg(
   filename = DIS_FILE,
-  width = 11200,
-  height = 8600,
-  res = 600,
-  quality = 100,
+  width = 5500,
+  height = 4000,
+  res = 300,
+  quality = 75,
   bg = "white"
 )
 
