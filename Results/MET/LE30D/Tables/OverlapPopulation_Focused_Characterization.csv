@@ -1,0 +1,9 @@
+Cohort,Characteristic_Raw,Characteristic,Unweighted,IPTW,Overlap weighting,IPTW minus unweighted,Overlap minus unweighted,Overlap minus IPTW,"Overlap vs unweighted, % difference"
+"3-4 days, within 30 days",ddose_prev,"Last daily methadone dose before interruption, mg",42.2,43.4,46.9,1.2,4.7,3.5,11.2
+"3-4 days, within 30 days",ret_length,"Duration of OAT episode before interruption, days",9.7,10,11.5,0.3,1.8,1.5,18.8
+"3-4 days, after 30 days",ddose_prev,"Last daily methadone dose before interruption, mg",75.7,75.7,71.5,-0,-4.3,-4.2,-5.6
+"3-4 days, after 30 days",ret_length,"Duration of OAT episode before interruption, days",186.9,181.4,168.8,-5.5,-18.1,-12.6,-9.7
+"5-14 days, within 30 days",ddose_prev,"Last daily methadone dose before interruption, mg",43.1,46.6,52.4,3.6,9.4,5.8,21.8
+"5-14 days, within 30 days",ret_length,"Duration of OAT episode before interruption, days",14.4,14.6,16.1,0.2,1.6,1.4,11.3
+"5-14 days, after 30 days",ddose_prev,"Last daily methadone dose before interruption, mg",78.1,81.6,71.9,3.5,-6.2,-9.7,-8
+"5-14 days, after 30 days",ret_length,"Duration of OAT episode before interruption, days",166.8,168.1,131.4,1.3,-35.4,-36.7,-21.2
