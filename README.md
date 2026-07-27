@@ -49,7 +49,7 @@ Momenul Haque Mondol, Jeong Eun Min, Michelle Zanette, Md. Belal Hossain, Megan 
 - `04_assessing_covariates_dist_met, 04_assessing_positivity_met_LE30D_TR2, 04_assessing_positivity_met_LE30D_TR3, and 04_sa_assessing overlap_met` — Some diagnostic plots.
 
 ### Results
-Stored in the **Results>MET** folder
+Stored in the **Results\>MET** folder
 
 ---
 
