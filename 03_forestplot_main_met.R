@@ -1,36 +1,28 @@
 library(tidyverse)
 library(forestploter)
 library(grid)
-# FOREST PLOT PREPARATION: Cumulative Incidence & Rates
-# Missed-dose trials: MET interruption of 3-4 days and 5-14 days
-# Outcomes: Overdose (1 month) and Discontinuation (12 months)
 
-library(tidyverse)
+# ── 1. SET PATHS AND LOAD DATA ────────────────────────────────────────────────
+# Pointing specifically to the LE30D subgroup results
+RES_DIR_LE30D <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/LE30D/"
 
-# LOAD RISK RESULTS
+risk_tr2_le30 <- readRDS(paste0(RES_DIR_LE30D, "Risk/risk_tr2.rds"))
+risk_tr3_le30 <- readRDS(paste0(RES_DIR_LE30D, "Risk/risk_tr3.rds"))
 
-
-
-RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/"
-
-# UNIFIED EXTRACTION: Absolute Risk and Risk Difference at time t
+dat_tr2_le30 <- readRDS(paste0(RES_DIR_LE30D, "PScore/", "ps_weight_tr2_34d_all.rds"))
+dat_tr3_le30 <- readRDS(paste0(RES_DIR_LE30D, "PScore/", "ps_weight_tr3_all.rds"))
 
 
+RES_DIR_GT30D <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/GT30D/"
 
-risk_tr2 <- readRDS(paste0(RES_DIR, "Risk/risk_tr2_34d_rmst.rds"))
+risk_tr2_gt30 <- readRDS(paste0(RES_DIR_GT30D, "Risk/risk_tr2.rds"))
+risk_tr3_gt30 <- readRDS(paste0(RES_DIR_GT30D, "Risk/risk_tr3.rds"))
 
-risk_tr3 <- readRDS(paste0(RES_DIR, "Risk/risk_tr3_514d_rmst.rds"))
-
-dat_tr2_first <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_first.rds"))
-dat_tr2_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr2_34d_all.rds"))
-dat_tr3_first <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_first.rds"))
-dat_tr3_all <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr3_all.rds"))
+dat_tr2_gt30 <- readRDS(paste0(RES_DIR_GT30D, "PScore/", "ps_weight_tr2_34d_all.rds"))
+dat_tr3_gt30 <- readRDS(paste0(RES_DIR_GT30D, "PScore/", "ps_weight_tr3_all.rds"))
 
 
-
-library(tidyverse)
-library(forestploter)
-library(grid)
+# ── 2. HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 compute_summary_stats_timewin <- function(Dat, 
                                           time_var = "time_od_acute", 
@@ -38,12 +30,7 @@ compute_summary_stats_timewin <- function(Dat,
                                           weight_var = "wt_trunc",
                                           trt_var = "trt",
                                           max_time = 90) {
-  
-  library(dplyr)
-  library(rlang)
-  
   Dat %>%
-    # Restrict to events within time window
     mutate(
       event_in_window = ifelse(!!sym(time_var) <= max_time, !!sym(event_var), 0)
     ) %>%
@@ -51,7 +38,7 @@ compute_summary_stats_timewin <- function(Dat,
     summarise(
       Episode = n(),
       Weighted_Episode = sum(!!sym(weight_var), na.rm = TRUE),
-      Event = sum(event_in_window, na.rm = TRUE),  # Events within time window
+      Event = sum(event_in_window, na.rm = TRUE), 
       Weighted_event = sum(!!sym(weight_var) * event_in_window, na.rm = TRUE),
       Total_PY = sum(!!sym(weight_var) * !!sym(time_var), na.rm = TRUE) / 52.17857,
       Rate_PY = Weighted_event / Total_PY,
@@ -61,9 +48,8 @@ compute_summary_stats_timewin <- function(Dat,
     select(trt_var, Episode, Event, Rate_100PY)
 }
 
-
 extract_rd_data <- function(risk_obj, dat_weights, max_time, outcome = "od", 
-                            ref_name = "no reversion", int_label) {
+                            ref_name = "no reversion", int_label, group = "≤ 30 days") {
   
   time_v  <- if(outcome == "dis") "time_discont" else "time_od_acute"
   event_v <- if(outcome == "dis") "sens_discont" else "sens_od_acute"
@@ -107,12 +93,12 @@ extract_rd_data <- function(risk_obj, dat_weights, max_time, outcome = "od",
       rd_pct = if_else(trt_group == ref_name, 0, rd_pct),
       rd_lower_pct = if_else(trt_group == ref_name, 0, rd_lower_pct),
       rd_upper_pct = if_else(trt_group == ref_name, 0, rd_upper_pct),
-      Interruption = int_label
+      Interruption = int_label,
+      group = group
     )
   
   return(res)
 }
-
 
 trt_colors <- c(
   "No dose change" = "black", 
@@ -121,70 +107,17 @@ trt_colors <- c(
   "Dose increase" = "#D62728"
 )
 
-
-# 2. FIGURE 2A: OVERDOSE RISK DIFFERENCE (30 Days) #######
+# FIGURE 2: OD ##################
 
 risk_at_od <- 30
 
-tr2_od_rd <- extract_rd_data(risk_tr2$all$od$ci, dat_tr2_all$data_weights, risk_at_od, 
-                             outcome = "od", int_label = "3-4 days")
-tr3_od_rd <- extract_rd_data(risk_tr3$all$od$ci, dat_tr3_all$data_weights, risk_at_od, 
-                             outcome = "od", int_label = "5-14 days")
+tr2_od_rd_le30 <- extract_rd_data(risk_tr2_le30$od$ci, dat_tr2_le30$data_weights, risk_at_od, 
+                             outcome = "od", int_label = "3-4 days", group = "≤ 30 days")
+tr2_od_rd_gt30 <- extract_rd_data(risk_tr2_gt30$od$ci, dat_tr2_gt30$data_weights, risk_at_od, 
+                                  outcome = "od", int_label = "3-4 days", group = "> 30 days")
 
-p_2a <- forest(
-  plot_data_2a[, c("Interruption", "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
-                   "% risk at 1 month\n(95% CI)", " ", "% Difference in 1-month Risk (95% CI)")],
-  est = plot_data_2a$rd_pct, lower = plot_data_2a$rd_lower_pct, upper = plot_data_2a$rd_upper_pct,
-  ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-2.5, 2.5), ticks_at = c(-2, -1, 0, 1, 2),
-  xlab = "Risk difference (%)",
-  title = "",
-  theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
-                       ci_Theight = 0.2, # <--- ADDS THE CI EDGE BARS
-                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
-                       xlab_adjust = c("refline", "center"))
-)
-
-# Alignments for Figure 2A
-p_2a <- edit_plot(p_2a, col = 1:2, part = "header", hjust = 0, x = unit(0, "npc"))
-p_2a <- edit_plot(p_2a, col = 1:2, part = "body", hjust = 0, x = unit(0, "npc"))
-p_2a <- edit_plot(p_2a, col = 3:6, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
-p_2a <- edit_plot(p_2a, col = 3:5, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
-p_2a <- edit_plot(p_2a, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
-
-# ---> NEW: Apply Colors and Bigger Point Estimates <---
-ci_col_2a <- trt_colors[plot_data_2a$`Dose adjustment\nafter interruption`]
-
-for(i in 1:nrow(plot_data_2a)) {
-  if(!is.na(plot_data_2a$rd_pct[i])) { 
-    current_color <- ci_col_2a[i]
-    p_2a <- edit_plot(p_2a, row = i, col = 6, which = "ci",
-                      gp = gpar(col = current_color, fill = current_color, cex = 1.2)) # cex=1.8 makes the box bigger
-  }
-}
-
-# Add the existing left-aligned footnote
-p_2a_final <- add_grob(p_2a, row = nrow(plot_data_2a) + 2, col = 1:2, order = "background", 
-                       gb_fn = gridtext::richtext_grob, 
-                       text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
-                       gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
-                       x = unit(0, "npc"), y = unit(1, "npc"))
-
-
-jpeg(paste0(RES_DIR, "Figures/June09/", "Figure2_A_OD_RD.jpg"), width = 5000, height = 1800, res = 400)
-p_2a_final
-dev.off()
-
-
-# 3. FIGURE 2B: DISCONTINUATION RISK DIFFERENCE (365 Days) ########
-
-risk_at_dis <- 365
-
-tr2_dis_rd <- extract_rd_data(risk_tr2$all$dis$ci, dat_tr2_all$data_weights, risk_at_dis, 
-                              outcome = "dis", int_label = "3-4 days")
-tr3_dis_rd <- extract_rd_data(risk_tr3$all$dis$ci, dat_tr3_all$data_weights, risk_at_dis, 
-                              outcome = "dis", int_label = "5-14 days")
-
-plot_data_2b <- bind_rows(tr2_dis_rd, tr3_dis_rd) %>%
+# ADDED: The missing data manipulation block for 2A
+plot_data_2a <- bind_rows(tr2_od_rd_le30, tr2_od_rd_gt30) %>%
   mutate(
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
@@ -195,49 +128,302 @@ plot_data_2b <- bind_rows(tr2_dis_rd, tr3_dis_rd) %>%
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
     rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
     Interruption = ifelse(duplicated(Interruption), "", Interruption),
-    # Assign the new header to the plot canvas column
-    `% Difference in 12-months Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
+    group = ifelse(duplicated(group), "", group),
+    
+    # Create the blank canvas column
+    `% Difference in 1-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
   ) %>%
   rename(
+    `Episode duration\nbefore interruption` = "group",
     `Dose adjustment\nafter interruption` = "trt_group",
     `Episode at risk\nat reinitiation, n` = "Episode",
-    `% risk at 12 months\n(95% CI)` = "abs_risk_disp",
-    # Clear the header for the numeric column to allow spanning
-    ` ` = "rd_disp"
+    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
+    ` ` = "rd_disp" # This holds the text
   )
 
-p_2b <- forest(
-  plot_data_2b[, c("Interruption", "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
-                   "% risk at 12 months\n(95% CI)", " ", "% Difference in 12-months Risk (95% CI)")],
-  est = plot_data_2b$rd_pct, lower = plot_data_2b$rd_lower_pct, upper = plot_data_2b$rd_upper_pct,
-  ci_column = 6, ref_line = 0, x_trans = "none", xlim = c(-12.5, 12.5), ticks_at = c(-10, -5, 0, 5, 10),
+
+
+tr3_od_rd_le30 <- extract_rd_data(risk_tr3_le30$od$ci, dat_tr3_le30$data_weights, risk_at_od, 
+                                  outcome = "od", int_label = "5-14 days", group = "≤ 30 days")
+tr3_od_rd_gt30 <- extract_rd_data(risk_tr3_gt30$od$ci, dat_tr3_gt30$data_weights, risk_at_od, 
+                                  outcome = "od", int_label = "5-14 days", group = "> 30 days")
+
+
+
+plot_data_3a <- bind_rows(tr3_od_rd_le30, tr3_od_rd_gt30) %>%
+  mutate(
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
+    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    Interruption = ifelse(duplicated(Interruption), "", Interruption),
+    group = ifelse(duplicated(group), "", group),
+    
+    # Create the blank canvas column
+    `% Difference in 1-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
+  rename(
+    `Episode duration\nbefore interruption` = "group",
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode at risk\nat reinitiation, n` = "Episode",
+    `% risk at 1 month\n(95% CI)` = "abs_risk_disp",
+    ` ` = "rd_disp" # This holds the text
+  )
+
+plot_data_od <- bind_rows(plot_data_2a, plot_data_3a)
+
+
+
+p_2a <- forest(
+  plot_data_od[, c("Interruption", "Episode duration\nbefore interruption", 
+                   "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
+                   "% risk at 1 month\n(95% CI)", " ", "% Difference in 1-month Risk (95% CI)")],
+  est = plot_data_od$rd_pct, lower = plot_data_od$rd_lower_pct, upper = plot_data_od$rd_upper_pct,
+  ci_column = 7, ref_line = 0, x_trans = "none", xlim = c(-2.5, 2.5), ticks_at = c(-2, -1, 0, 1, 2),
   xlab = "Risk difference (%)",
-  title = "",
   theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
-                       ci_Theight = 0.2, # <--- ADDS THE CI EDGE BARS
+                       ci_Theight = 0.2, 
                        refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
                        xlab_adjust = c("refline", "center"))
 )
 
-# Alignments for Figure 2B
-p_2b <- edit_plot(p_2b, col = 1:2, part = "header", hjust = 0, x = unit(0, "npc"))
-p_2b <- edit_plot(p_2b, col = 1:2, part = "body", hjust = 0, x = unit(0, "npc"))
-p_2b <- edit_plot(p_2b, col = 3:6, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
-p_2b <- edit_plot(p_2b, col = 3:5, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
-p_2b <- edit_plot(p_2b, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
+p_2a <- edit_plot(p_2a, col = 1:3, part = "header", hjust = 0, x = unit(0, "npc"))
+p_2a <- edit_plot(p_2a, col = 1:3, part = "body", hjust = 0, x = unit(0, "npc"))
+p_2a <- edit_plot(p_2a, col = c(4:7), part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_2a <- edit_plot(p_2a, col = c(2, 4:5), part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_2a <- edit_plot(p_2a, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_2a <- edit_plot(p_2a, col = 7, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
-# ---> NEW: Apply Colors and Bigger Point Estimates <---
-ci_col_2b <- trt_colors[plot_data_2b$`Dose adjustment\nafter interruption`]
+ci_col_2a <- trt_colors[plot_data_od$`Dose adjustment\nafter interruption`]
 
-for(i in 1:nrow(plot_data_2b)) {
-  if(!is.na(plot_data_2b$rd_pct[i])) { 
-    current_color <- ci_col_2b[i]
-    p_2b <- edit_plot(p_2b, row = i, col = 6, which = "ci",
-                      gp = gpar(col = current_color, fill = current_color, cex = 1.2)) # cex=1.8 makes the box bigger
+for(i in 1:nrow(plot_data_od)) {
+  if(!is.na(plot_data_od$rd_pct[i])) { 
+    current_color <- ci_col_2a[i]
+    p_2a <- edit_plot(p_2a, row = i, col = 7, which = "ci",
+                      gp = gpar(col = current_color, fill = current_color, cex = 1.2)) 
   }
 }
 
+# p_2a_final <- add_grob(p_2a, row = nrow(plot_data_od) + 2, col = 1:2, order = "background", 
+#                        gb_fn = gridtext::richtext_grob, 
+#                        text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
+#                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
+#                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR, "Figures/June09/", "Figure2_B_Discont_RD.jpg"), width = 5200, height = 1800, res = 400)
-p_2a_final
+jpeg(paste0(RES_DIR_LE30D, "Figures/Figure2_OD_RD.jpg"), width = 5800, height = 2500, res = 400)
+p_2a
 dev.off()
+
+
+# FIGURE 3: DIS ##############
+
+risk_at_dis <- 365
+
+tr2_dis_rd_le30 <- extract_rd_data(risk_tr2_le30$dis$ci, dat_tr2_le30$data_weights, risk_at_dis, 
+                                   outcome = "dis", int_label = "3-4 days", group = "≤ 30 days")
+tr2_dis_rd_gt30 <- extract_rd_data(risk_tr2_gt30$dis$ci, dat_tr2_gt30$data_weights, risk_at_dis, 
+                                   outcome = "dis", int_label = "3-4 days", group = "> 30 days")
+
+# ADDED: The missing data manipulation block for 2A
+plot_data_2b <- bind_rows(tr2_dis_rd_le30, tr2_dis_rd_gt30) %>%
+  mutate(
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
+    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    Interruption = ifelse(duplicated(Interruption), "", Interruption),
+    group = ifelse(duplicated(group), "", group),
+    
+    # Create the blank canvas column
+    `% Difference in 12-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
+  rename(
+    `Episode duration\nbefore interruption` = "group",
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode at risk\nat reinitiation, n` = "Episode",
+    `% risk at 12 month\n(95% CI)` = "abs_risk_disp",
+    ` ` = "rd_disp" # This holds the text
+  )
+
+
+
+tr3_dis_rd_le30 <- extract_rd_data(risk_tr3_le30$dis$ci, dat_tr3_le30$data_weights, risk_at_dis, 
+                                   outcome = "dis", int_label = "5-14 days", group = "≤ 30 days")
+tr3_dis_rd_gt30 <- extract_rd_data(risk_tr3_gt30$dis$ci, dat_tr3_gt30$data_weights, risk_at_dis, 
+                                   outcome = "dis", int_label = "5-14 days", group = "> 30 days")
+
+
+
+plot_data_3b <- bind_rows(tr3_dis_rd_le30, tr3_dis_rd_gt30) %>%
+  mutate(
+    trt_group = recode(trt_group,
+                       "no reversion" = "No dose change",
+                       "1-<50%" = "<50% reduction",
+                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       "increase" = "Dose increase"),
+    rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
+    rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
+    rd_upper_pct = ifelse(trt_group == "No dose change", NA, rd_upper_pct),
+    Interruption = ifelse(duplicated(Interruption), "", Interruption),
+    group = ifelse(duplicated(group), "", group),
+    
+    # Create the blank canvas column
+    `% Difference in 12-month Risk (95% CI)` = paste(rep(" ", 16), collapse = " ") 
+  ) %>%
+  rename(
+    `Episode duration\nbefore interruption` = "group",
+    `Dose adjustment\nafter interruption` = "trt_group",
+    `Episode at risk\nat reinitiation, n` = "Episode",
+    `% risk at 12 month\n(95% CI)` = "abs_risk_disp",
+    ` ` = "rd_disp" # This holds the text
+  )
+
+plot_data_dis <- bind_rows(plot_data_2b, plot_data_3b)
+
+
+
+p_2b <- forest(
+  plot_data_dis[, c("Interruption", "Episode duration\nbefore interruption", 
+                    "Dose adjustment\nafter interruption", "Episode at risk\nat reinitiation, n", 
+                    "% risk at 12 month\n(95% CI)", " ", "% Difference in 12-month Risk (95% CI)")],
+  est = plot_data_dis$rd_pct, lower = plot_data_dis$rd_lower_pct, upper = plot_data_dis$rd_upper_pct,
+  ci_column = 7, ref_line = 0, x_trans = "none", xlim = c(-15, 15), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
+  xlab = "Risk difference (%)",
+  theme = forest_theme(base_size = 14, ci_pch = 15, ci_lwd = 1.7,
+                       ci_Theight = 0.2, 
+                       refline_gp = gpar(lwd = 1, lty = "dashed", col = "red"),
+                       xlab_adjust = c("refline", "center"))
+)
+
+p_2b <- edit_plot(p_2b, col = 1:3, part = "header", hjust = 0, x = unit(0, "npc"))
+p_2b <- edit_plot(p_2b, col = 1:3, part = "body", hjust = 0, x = unit(0, "npc"))
+p_2b <- edit_plot(p_2b, col = c(4:7), part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_2b <- edit_plot(p_2b, col = c(2, 4:5), part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_2b <- edit_plot(p_2b, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_2b <- edit_plot(p_2b, col = 7, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
+
+ci_col_2b <- trt_colors[plot_data_dis$`Dose adjustment\nafter interruption`]
+
+for(i in 1:nrow(plot_data_dis)) {
+  if(!is.na(plot_data_dis$rd_pct[i])) { 
+    current_color <- ci_col_2b[i]
+    p_2b <- edit_plot(p_2b, row = i, col = 7, which = "ci",
+                      gp = gpar(col = current_color, fill = current_color, cex = 1.2)) 
+  }
+}
+
+# p_2b_final <- add_grob(p_2b, row = nrow(plot_data_dis) + 2, col = 1:2, order = "background", 
+#                        gb_fn = gridtext::richtext_grob, 
+#                        text = "Risk: cumulative incidence<br>CI: compatibility ('confidence') intervals", 
+#                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
+#                        x = unit(0, "npc"), y = unit(1, "npc"))
+
+jpeg(paste0(RES_DIR_LE30D, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2500, res = 400)
+p_2b
+dev.off()
+
+
+# Interaction contrast ######################
+calc_ic_from_separate <- function(sim_data_ref, 
+                                  sim_data_alt, 
+                                  target_horizon, 
+                                  active_trts = c("1-<50%", ">=50%/<=40mg", "increase"),
+                                  ref_trt = "no reversion") {
+  
+  # Filter both datasets to the target horizon
+  d_ref <- sim_data_ref |> filter(horizon == target_horizon) |> select(sim, trt, risk_ref = risk)
+  d_alt <- sim_data_alt |> filter(horizon == target_horizon) |> select(sim, trt, risk_alt = risk)
+  
+  if (nrow(d_ref) == 0 | nrow(d_alt) == 0) stop("Target horizon not found in one or both datasets.")
+  
+  # Pivot both to wide format
+  d_ref_wide <- d_ref |> pivot_wider(names_from = trt, values_from = risk_ref, names_prefix = "ref_")
+  d_alt_wide <- d_alt |> pivot_wider(names_from = trt, values_from = risk_alt, names_prefix = "alt_")
+  
+  # Join the independent bootstrap draws by simulation ID
+  d_joined <- inner_join(d_ref_wide, d_alt_wide, by = "sim")
+  
+  # Iterate over active treatments to calculate the IC per simulation
+  res_list <- lapply(active_trts, function(t_level) {
+    
+    ref_base_col <- paste0("ref_", ref_trt)
+    ref_act_col  <- paste0("ref_", t_level)
+    alt_base_col <- paste0("alt_", ref_trt)
+    alt_act_col  <- paste0("alt_", t_level)
+    
+    d_calc <- d_joined |>
+      mutate(
+        # Stratified Risk Differences
+        RD_ref_stratum = .data[[ref_act_col]] - .data[[ref_base_col]],
+        RD_alt_stratum = .data[[alt_act_col]] - .data[[alt_base_col]],
+        
+        # Interaction Contrast
+        IC = RD_alt_stratum - RD_ref_stratum
+      ) |>
+      select(sim, IC)
+    
+    # Summarize across the bootstrap distribution
+    d_summary <- d_calc |>
+      summarise(
+        Treatment = t_level,
+        Metric = "Interaction Contrast (IC)",
+        Estimate = mean(IC),
+        Lower_95CI = quantile(IC, 0.025),
+        Upper_95CI = quantile(IC, 0.975),
+        .groups = "drop"
+      )
+    
+    return(d_summary)
+  })
+  
+  bind_rows(res_list) |> arrange(Treatment)
+}
+
+
+risk_tr2_le30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/LE30D/", "Risk/", "risk_tr2.rds"))
+risk_tr2_gt30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/GT30D/", "Risk/", "risk_tr2.rds"))
+
+risk_tr3_le30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/LE30D/", "Risk/", "risk_tr3.rds"))
+risk_tr3_gt30 <- readRDS(paste0("H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/GT30D/", "Risk/", "risk_tr3.rds"))
+
+
+dim(risk_tr2_gt30$od$ci$sim_data)
+
+
+ic2_results_od_30 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr2_gt30$od$ci$sim_data, 
+  sim_data_alt = risk_tr2_le30$od$ci$sim_data, 
+  target_horizon = 30
+)
+
+ic3_results_od_30 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr3_gt30$od$ci$sim_data, 
+  sim_data_alt = risk_tr3_le30$od$ci$sim_data, 
+  target_horizon = 30
+)
+
+
+
+ic2_results_dis_365 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr2_gt30$dis$ci$sim_data, 
+  sim_data_alt = risk_tr2_le30$dis$ci$sim_data, 
+  target_horizon = 365
+)
+
+ic3_results_dis_365 <- calc_ic_from_separate(
+  sim_data_ref = risk_tr3_gt30$dis$ci$sim_data, 
+  sim_data_alt = risk_tr3_le30$dis$ci$sim_data, 
+  target_horizon = 365
+)
+
+
+
+
