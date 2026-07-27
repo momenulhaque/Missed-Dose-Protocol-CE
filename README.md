@@ -34,14 +34,6 @@ Each paper's specific documentation is provided in its own section below.
 ### Authors
 Momenul Haque Mondol, Jeong Eun Min, Michelle Zanette, Md. Belal Hossain, Megan Kurz, Paxton Bach, Robert William Platt, Shaun Seaman, Sander Greenland, Lawrence C. McCandless, Mohammad Ehsanul Karim, Paul Gustafson, Maria Eugenia Socías, Jason M Sutherland, Bohdan Nosyk.
 
-### Overview
-Using linked administrative health records from BC (2010–2022), we emulated two target trials — one for methadone interruptions of **3–4 days** and one for **5–14 days** — to estimate how alternative reinitiation strategies affect:
-
-- **Overdose-related acute care visits** (hospital or ED encounters for poisoning; ICD-10 codes T40, T42.4, T43.6) — assessed at 1 month.
-- **Treatment discontinuation** (no OAT dispensation for ≥15 consecutive days) — assessed at 12 months.
-
-At reinitiation, the first dispensed dose was categorized relative to the previous dose as: **no change (reference)**, **<50% reduction**, **≥50% reduction** (or reduction to the guideline-recommended starting dose of ≤40 mg), or **dose increase**. Findings support **tailoring missed-dose protocols to treatment phase**: within the first 30 days of treatment, dose increases after interruptions were associated with lower risk of both outcomes, whereas later in treatment resuming the prior dose had similar or lower risk.
-
 ### Code (files ending in `_met`)
 - `3.0 analytic_data_met` — build the methadone analytic dataset (SAS).
 - `5.0 Flow_chart_..._met` — cohort flow chart / attrition counts (SAS).
