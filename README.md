@@ -2,7 +2,7 @@
 
 **Author:** Momenul Haque Mondol
 
-This repository contains the SAS and R code used to emulate target trials evaluating alternative dose-adjustment strategies following opioid agonist treatment (OAT) interruptions (missed doses), using population-based linked administrative health data from British Columbia (BC), Canada.
+This repository contains the SAS and R code used to emulate target trials evaluating alternative dose-adjustment strategies following interruptions (missed doses) of opioid agonist treatment (OAT), using population-based linked administrative health data from British Columbia (BC), Canada.
 
 ---
 
