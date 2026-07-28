@@ -1,13 +1,15 @@
 proc datasets kill;
 quit;
 
+
 options compress=y;
 
 libname der "W:\SUD\Data\2022\derived";
 libname lib "W:\SUD\Data\2022\SAS data";
 libname pss "W:\SUD\Data\2022\derived\PSS";
-libname tmplib "E:\SAS Data\Missed dose protocol";
-libname tmplib1 "E:\SAS Data\Missed dose protocol_v2";
+libname tmplib2 "E:\SAS Data\Missed dose protocol_v2";
+libname tmplib3 "E:\SAS Data\Missed dose protocol_v3";
+
 
 /*JM2: see my comments starting with "JM2" (Apr 11, 2025)*/
 
@@ -176,7 +178,7 @@ data cohort;
 merge der.cohort(keep=studyid_rev f_oat_dt end_fu_dt rev_dod 
 		dob gender f_oud_dt inmate_dup_ind where=(inmate_dup_ind=0))
 	epi_b(in=a) f_od_acute od_death f_acute(drop=f_hosp_dt f_ed_dt)
-	tmplib.prior_po(in=b);
+	tmplib2.prior_po(in=b);
 by studyid_rev;
 *years since oud diagnosis;
 yr_since_oud=(time0-f_oud_dt)/365.25; 
@@ -291,14 +293,9 @@ proc freq; table incar_grp_bl; run;
 
 
 *save cohort;
-data tmplib1.TT_cohort_b;
+
+data tmplib2.TT_cohort_b;
 set cohort2;
-run;
-
-/* part of SA */
-
-data tmplib1.TT_cohort_b;
-set tmplib1.TT_cohort_b;
 by studyid_rev;
 *end of episode+gap;
 if drug_end in ('M','MS','S') then dt_end_gap30=min(end_fu_dt, dt_end+30);
@@ -338,7 +335,7 @@ proc sql;
 create table past_month_udt as
 select w.studyid_rev, w.episode, w.myepisode, w.time0,
 	max(z.poc) as poc_udt, max(1-z.poc) as lab_udt, max(z.servdt ne .) as udt
-from tmplib1.TT_cohort_b as w left join tmplib.udt_days as z
+from tmplib2.TT_cohort_b as w left join tmplib2.udt_days as z
 on w.studyid_rev=z.studyid_rev and w.time0-30 <= z.servdt < w.time0
 group by w.studyid_rev, w.episode, w.myepisode, w.time0;
 quit;
@@ -358,7 +355,7 @@ proc sql;
 create table past_homeless as
 select w.studyid_rev, w.episode, w.myepisode, w.time0,
 	max(case when i.cuml_nfa >= 3 or i.home_icd=1 then i.dt else . end) as l_homeless format=date9.
-from tmplib1.TT_cohort_b as w left join tmplib.homeless_recs as i
+from tmplib2.TT_cohort_b as w left join tmplib2.homeless_recs as i
 on w.studyid_rev=i.studyid_rev and w.time0-1826 <= i.dt < w.time0
 group by w.studyid_rev, w.episode, w.myepisode, w.time0; *1826 days = 5 years;
 quit;
@@ -374,7 +371,7 @@ year=year(time0);
 run;
 
 
-data tmplib.lha_yr;
+data tmplib2.lha_yr;
 set der.lha_yr;
 by studyid_rev year;
 retain lha_pre;
@@ -388,7 +385,7 @@ proc sql;
 create table lha as
 select a.*, b.oop,
 case when b.oop=0 and (b.lha=. or b.lha in (888,999)) then b.lha_pre else b.lha end as lha
-from past_homeless as a left join tmplib.lha_yr as b on
+from past_homeless as a left join tmplib2.lha_yr as b on
 a.studyid_rev=b.studyid_rev and a.year=b.year
 order by a.studyid_rev, a.episode, a.myepisode, a.time0; 
 quit; 
@@ -434,7 +431,7 @@ proc sql;
 create table past_virtual_care as
 select e.studyid_rev, e.episode, e.myepisode, e.time0, max(p.servdt ne .) as virtual_care,
 	max(p.oud=1) as virtual_oud
-from tmplib1.TT_cohort_b as e left join tmplib.msp_virtual as p
+from tmplib2.TT_cohort_b as e left join tmplib2.msp_virtual as p
 on e.studyid_rev=p.studyid_rev and e.time0-30 <= p.servdt <= e.time0 
 group by  e.studyid_rev, e.episode, e.myepisode, e.time0;
 quit; /*note that wk_start=servdt was included as dispensation occurs after seeing a doctor*/
@@ -446,10 +443,11 @@ proc sql;
 create table prac as
 select e.studyid_rev, e.episode, e.myepisode, e.time0, p.ddose as f_ddose,
 	p.prac_studyid1 as prac_studyid
-from tmplib1.TT_cohort_b as e left join der.days_b as p
+from tmplib2.TT_cohort_b as e left join der.days_b as p
 on e.studyid_rev=p.studyid_rev and e.time0=p.dt2 
 order by e.studyid_rev, e.episode, e.myepisode;
 quit;
+
 
 *var related to prescriber;
 proc sql;
@@ -468,14 +466,14 @@ proc freq data=prov2; table clin_size/missing; run;
 proc sql;
 create table pss_time0 as
 select e.studyid_rev, e.episode, e.myepisode, e.time0, p.dt2 ne . as pss
-from tmplib1.TT_cohort_b as e left join pss.Pss_opioid_epi_days as p
+from tmplib2.TT_cohort_b as e left join pss.Pss_opioid_epi_days as p
 on e.studyid_rev=p.studyid_rev and e.time0= p.dt2 
 order by e.studyid_rev, e.episode, e.myepisode;
 quit;
 
 
 data past_comorb;
-merge tmplib1.TT_cohort_b(in=a) der.cohort_comorb(keep=studyid_rev first_sud_date first_aud_date
+merge tmplib2.TT_cohort_b(in=a) der.cohort_comorb(keep=studyid_rev first_sud_date first_aud_date
 	first_hiv_date first_hcv_date first_bpd_date first_mdd_date first_schiz_date
 	first_canc_date first_palli_date first_asthma_date first_copd_date);
 by studyid_rev;
@@ -501,7 +499,7 @@ proc sql;
 create table past_sed_psy as
 select w.studyid_rev, w.episode, w.myepisode, w.time0,
 	max(sed=1) as sed_med, max(psy=1) as psy_med
-from tmplib1.TT_cohort_b as w 
+from tmplib2.TT_cohort_b as w 
 left join der.Sed_psy_days(where=(dt >= '01DEC2009'd)) as b
 on w.studyid_rev=b.studyid_rev and (
 	w.time0-30 <= b.dt < w.time0 or
@@ -514,16 +512,18 @@ proc sql;
 create table past_opioid as
 select w.studyid_rev, w.episode, w.myepisode, w.time0, 
 	max(p.dt2 ne .) as po, count(distinct p.dt2) as d_po
-from tmplib1.TT_cohort_b as w left join der.opioid_rx_days(where=(dt2 >= '01DEC2009'd)) as p
+from tmplib2.TT_cohort_b as w left join der.opioid_rx_days(where=(dt2 >= '01DEC2009'd)) as p
 on w.studyid_rev=p.studyid_rev and w.time0-30 <= p.dt2 < w.time0
 group by w.studyid_rev, w.episode, w.myepisode, w.time0;
 quit;
+
+
 
 proc sql;
 create table past_hosp as
 select w.studyid_rev, w.episode, w.myepisode, w.time0, 
 	max(z.main_sud=1) as drug_acute, max(z.main_psych=1) as psy_hosp
-from tmplib1.TT_cohort_b as w 
+from tmplib2.TT_cohort_b as w 
 left join der.Sud_psych_acute(where=(dad=1 or nacrs=1)) as z
 on w.studyid_rev=z.studyid_rev and w.time0-30 <= z.dt < w.time0
 group by w.studyid_rev, w.episode, w.myepisode, w.time0;
@@ -534,10 +534,53 @@ create table past_comorb2 as
 select w.studyid_rev, w.episode, w.myepisode, w.time0, 
 	max(z.mh=1) as mh, max(z.cp=1) as cp, max(z.tob=1) as tob, 
 	max(z.canc=1) as canc, max(z.palli=1) as palli, max(z.social=1) as social_assist
-from tmplib1.TT_cohort_b as w left join der.pwoud_comorb_records(where=(dt >= '01JAN2009'd)) as z
+from tmplib2.TT_cohort_b as w left join der.pwoud_comorb_records(where=(dt >= '01JAN2009'd)) as z
 on w.studyid_rev=z.studyid_rev and w.time0-365 <= z.dt < w.time0
 group by w.studyid_rev, w.episode, w.myepisode, w.time0;
 quit;
+
+
+/* 0. Reference day (same anchor as carry_status) */
+data cohort_ref;
+   set tmplib2.TT_cohort_b;
+   ref_date  = time0 - gap_days - 1;   /* last covered day before the gap   */
+   int_start = time0 - gap_days;       /* first day of the interruption      */
+   int_end   = time0 - 1;              /* last day of the interruption       */
+   format ref_date int_start int_end date9.;
+run;
+
+proc sql;
+create table carry_expanded as
+select  e.studyid_rev, e.episode, e.time0, e.gap_days,
+        e.int_start, e.int_end,
+        c.dt2, c.newdays
+from cohort_ref as e
+left join der.days_b
+        (where=(dt2 = dt and newdays >= 3 and dt2 >= '01JAN2010'd)) as c
+   on   e.studyid_rev = c.studyid_rev
+   and  c.dt2 + c.newdays - 1 >= e.int_start   
+   and  c.dt2                 <= e.int_end     
+;
+quit;
+
+data carry_days_row;
+   set carry_expanded;
+   if missing(dt2) then cov_days = 0;
+   else cov_days = max(0,
+        min(dt2 + newdays - 1, int_end) - int_start + 1);
+run;
+
+proc sql;
+create table cohort_carrydays as
+select  studyid_rev, episode, time0, gap_days,
+        max(cov_days)          as carry_days,         
+        (max(cov_days) > 0)    as carry_status         
+from carry_days_row
+group by studyid_rev, episode, time0, gap_days
+;
+quit;
+
+
 
 /*proc sql;*/
 /*create table phy_att_b as*/
@@ -565,20 +608,20 @@ quit;
 /*quit;*/
 
 
-/*%include 'W:\SUD\Documents\2020\SAS code\cci_macro.sas';*/
-/** for macro "_CharlsonICD9CM";*/
-/*%include 'W:\SUD\Documents\Apr2019\SAS code\MCHP_SAS_macro_charlson_icd9CM_index.sas';*/
-/** for macro "_CharlsonICD10";*/
-/*%include 'W:\SUD\Documents\Apr2019\SAS code\MCHP_SAS_macro_charlson_icd10_index.sas';*/
-/**/
-/**/
-/*%cci_prior_time0(dad=der.dad_rev, dat=tmplib.TT_analytic_b, id=studyid_rev, dt=time0,*/
-/*	mo=12, output=cci_b);*/
-/**/
+%include 'W:\SUD\Documents\2020\SAS code\cci_macro.sas';
+* for macro "_CharlsonICD9CM";
+%include 'W:\SUD\Documents\Apr2019\SAS code\MCHP_SAS_macro_charlson_icd9CM_index.sas';
+* for macro "_CharlsonICD10";
+%include 'W:\SUD\Documents\Apr2019\SAS code\MCHP_SAS_macro_charlson_icd10_index.sas';
+
+
+%cci_prior_time0(dad=der.dad_rev, dat=tmplib2.TT_cohort_b, id=studyid_rev, dt=time0,
+	mo=12, output=cci_b);
+
 
 
 data TT_cohort_b;
-merge tmplib1.TT_cohort_b(in=a) tmplib.cci_b;
+merge tmplib2.TT_cohort_b(in=a) cci_b;
 by studyid_rev time0;
 cci_gt0 = cci > 0;
 if a;
@@ -587,10 +630,10 @@ run;
 proc freq data=TT_cohort_b; table cci/missing; run;
 
 
-data TT_analytic_b;
+data TT_cohort_b2;
 merge TT_cohort_b (in=a) past_month_udt past_homeless lha current_rural_status past_virtual_care prov2 pss_time0 
-past_comorb past_sed_psy past_opioid past_hosp past_hosp past_comorb2;
-by studyid_rev episode myepisode time0;
+past_comorb past_sed_psy past_opioid past_hosp past_hosp past_comorb2 cohort_carrydays;
+by studyid_rev episode  time0;
 if udt=0 then do; poc_udt=0; lab_udt=0; end;
 if rural=. then rural=0;
 *if clin_size=. then clin_size='1_small_<=13';
@@ -598,18 +641,14 @@ rename lha=clnt_lha ha_no=clnt_ha;
 run;
 
 
-proc freq data=TT_analytic_b; table clin_size cci/missing; run;
-
-data tmplib1.TT_analytic_b;
-set TT_analytic_b;
+data TT_cohort_b2;
+set TT_cohort_b2;
 by studyid_rev episode myepisode;
 age_st=(time0-dob)/365.25;
 age_eli=(age_st >= 18);
 preg_eli = 0;
 if f_preg_dt ne . then preg_eli = 1;
 run;
-
-proc freq data=tmplib1.TT_analytic_b; table clin_size cci/missing; run;
 
 
 /*data tmplib1.TT_analytic_b;*/
@@ -643,25 +682,24 @@ proc freq data=tmplib1.TT_analytic_b; table clin_size cci/missing; run;
 
 *find total # GP visits;
 
-/**/
-/*proc sql;*/
-/*create table gp_msp as*/
-/*select dat.studyid_rev, dat.time0, dat.prac_studyid_rev, */
-/*	count(distinct msp.servdt) as n_visits*/
-/*from tmplib1.TT_analytic_b as dat left join lib.msp (where=(clmspec in (0,21,87) and servdt>='1jan2009'd)) as msp*/
-/*on dat.studyid_rev=msp.studyid_rev and dat.time0-180<= msp.servdt <dat.time0*/
-/*group by dat.studyid_rev, dat.time0, dat.prac_studyid_rev; quit;*/
-/**/
-/*data tmplib.gp_msp_6m_b; set gp_msp; run;*/
-/**/
-/**find total # GP visits;*/
 
+proc sql;
+create table gp_msp as
+select dat.studyid_rev, dat.time0, dat.prac_studyid_rev, 
+	count(distinct msp.servdt) as n_visits
+from TT_cohort_b2 as dat left join lib.msp (where=(clmspec in (0,21,87) and servdt>='1jan2009'd)) as msp
+on dat.studyid_rev=msp.studyid_rev and dat.time0-180<= msp.servdt <dat.time0
+group by dat.studyid_rev, dat.time0, dat.prac_studyid_rev; quit;
+
+
+*find total # GP visits;
+data tmplib2.gp_msp_b; set gp_msp; run;
 
 
 proc sql;
 create table gp_msp_total as
 select studyid_rev, time0, sum(n_visits) as tot_visits, max(n_visits) as max_visits
-from tmplib.gp_msp_b group by studyid_rev, time0;
+from tmplib2.gp_msp_b group by studyid_rev, time0;
 quit;
 
 data gp_msp_total2;
@@ -674,13 +712,13 @@ run;
 
 
 
-data TT_analytic_b;
-merge tmplib1.TT_analytic_b(in=a) gp_msp_total2;
+data tmplib2.TT_analytic_b;
+merge TT_cohort_b2(in=a) gp_msp_total2;
 by studyid_rev time0;
 if a;
 run;
 
-proc freq data=TT_analytic_b; table phy_att/missing; run;
+proc freq data=tmplib2.TT_analytic_b; table phy_att/missing; run;
 
 
 
@@ -688,46 +726,8 @@ proc freq data=TT_analytic_b; table phy_att/missing; run;
     Exposure and outcomes category 
 ################*/
 
-
-/*data TT_analytic_b;*/
-/*	set TT_analytic_b;*/
-/*	by studyid_rev episode myepisode;*/
-/*	s_discont = 1;*/
-/*    *end_date = '31DEC2022'd ;  /*JM: use end_fu_dt instead*/*/
-/*    *format end_date date9.;*/
-/*	if rev_dod ne . and rev_dod <= dt_end_gap then s_discont = 0; */
-/*	if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < dt_end_gap and dt_end_gap =  then s_discont = 0;/*JM2: remove 'else'*/*/
-/**/
-/*	if s_discont = 0 then t_discont = min(rev_dod, f_dt_oop)-time0;*/
-/*	if s_discont = 1 then t_discont = dt_end_gap-time0;  /* Added out of province date*/*/
-/**/
-/**/
-/*	if f_od_acute_dt = . then s_od_acute = 0;*/
-/*	if f_od_acute_dt ne . then s_od_acute = 1;*/
-/*	if rev_dod ne . and rev_dod < f_od_acute_dt then s_od_acute = 0;/*JM2: remove 'else'*/*/
-/*	if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < f_od_acute_dt then s_od_acute = 0;/*JM2: remove 'else'*/*/
-/*	*else s_od_acute = 1; /*JM: Do you need this condition? this includes f_od_acute >= end_date*/*/
-/**/
-/*	if s_od_acute = 0 then t_od_acute = min(rev_dod, f_dt_oop)- time0;*/
-/*	/*JM2: you didn't censor at oat discontinuation, but then you used dt_end_gap to get the time t_od_acute*/*/
-/*	if s_od_acute = 1 then t_od_acute = f_od_acute_dt-time0;  /* Added out of province date*/*/
-/**/
-/*	if f_acute_dt = . then s_all_acute = 0;*/
-/*	if f_acute_dt ne . then s_all_acute = 1;*/
-/*	if rev_dod ne . and rev_dod < f_acute_dt then s_all_acute = 0;/*JM2: remove 'else'*/*/
-/*	if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < f_acute_dt then s_all_acute = 0;/*JM2: remove 'else'*/*/
-/*	*else s_od_acute = 1; /*JM: Do you need this condition? this includes f_od_acute >= end_date*/*/
-/**/
-/*	if s_all_acute = 0 then t_all_acute = min(rev_dod, f_dt_oop)- time0;*/
-/*	/*JM2: you didn't censor at oat discontinuation, but then you used dt_end_gap to get the time t_all_acute*/*/
-/*	if s_all_acute = 1 then t_all_acute = f_acute_dt-time0;  /* Added out of province date*/*/
-/**/
-/*run;/*JM2: what about admin censoring?*/*/;
-
-/* JM2: Here is my edit: */
-
 data TT_analytic_b;
-	set TT_analytic_b;
+	set tmplib2.TT_analytic_b;
 	by studyid_rev episode myepisode;
 	*JM2: revised one from your code;
 s_discont = 1;
@@ -812,23 +812,6 @@ t_all_acute2=enddt_all_acute-time0;
 
 format enddt_discont enddt_od_acute enddt_all_acute date9.;
 run;
-
-
-
-
-
-*JM2: compare two versions;
-proc freq data=TT_analytic_b;
-table s_discont*s_discont2  s_od_acute*s_od_acute2 s_all_acute*s_all_acute2/missing;
-run;
-
-proc freq data=TT_analytic_b;
-table s_discont*s_discont_14  s_discont*s_discont_30/missing;
-run;
-
-proc means data=TT_analytic_b;
- var t_od_acute2 t_discont2 t_od_acute t_discont t_discont_14 t_discont_30;
- run;
 
 
 
@@ -917,11 +900,7 @@ Saving the whole data set
 */
 
 
-
-data tmplib1.TT_analytic_all_b; set TT_analytic_b; run;
-
-
-data tmplib1.TT_analytic_all_b; set tmplib1.TT_analytic_all_b;
+data TT_analytic_b; set TT_analytic_b;
 	if age_st < 30 then age_cat = '[-Inf,30)';
 	else if age_st < 40 then age_cat = '[30,40)';
 	else if age_st < 50 then age_cat = '[40,50)';
@@ -951,73 +930,6 @@ data tmplib1.TT_analytic_all_b; set tmplib1.TT_analytic_all_b;
 run;
 
 
-
-data data_b;
-set tmplib1.TT_analytic_all_b;
-by studyid_rev episode myepisode;
-where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "B" and predrug in ("B", "") and ddose_rev ne .;
-if trial_gap <= 14;
-run;
-
-data tmplib1.TT_analytic_rprev_b;
-set data_b;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-data tmplib1.TT_analytic_rprev_nw_b;
-set data_b;
- if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data data_b1;
-set tmplib1.TT_analytic_all_b;
-by studyid_rev episode;
-where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "B" and predrug in ("B", "") and ddose_rev ne .;
-if first.episode and trial_gap <= 14;
-run;
-
-data tmplib1.TT_analytic_prev_b;
-set data_b1;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data tmplib1.TT_analytic_incid_b;
-set tmplib1.TT_analytic_prev_b;
-if episode = 1;
-run;
-
-
-
-
-data tmplib1.TT_analytic_prev_nw_b;
-set data_b1;
- if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data tmplib1.TT_analytic_incid_nw_b;
-set tmplib1.TT_analytic_prev_nw_b;
-if episode = 1;
-run;
-
-
-
-proc freq data=tmplib1.TT_analytic_incid_b;
- table trial_cat; run;
-
-
-
-
-/*
- Data merging for sensitivity analysis 
- */
- 
-data data_b;
-set tmplib1.TT_analytic_all_b;
-run;
-
 data maint_2wkdts_ed;
     set der.maint_2wkdts;
 	rename ddose = main_ddose;
@@ -1029,15 +941,15 @@ create table f_induction as
 select e.studyid_rev, e.episode, e.myepisode, e.time0,
 	min(p.f_maint_dt_end) format=date9. as f_induction_comp_dt, min(p.main_ddose) as maint_ddose,
 	min(p.maint_dur) as maint_dur, min(p.drug_maint) as drug_maint
-from tmplib1.TT_analytic_all_b as e left join maint_2wkdts_ed as p
+from TT_analytic_b as e left join maint_2wkdts_ed as p
 on e.studyid_rev=p.studyid_rev and (e.dt_start <= p.f_maint_dt_end <= e.time0) and drug_maint = "B"
 group by e.studyid_rev, e.episode, e.myepisode, e.time0;
 quit;
 
 
 
-data tmplib1.TT_analytic_alls_b;
-merge tmplib1.TT_analytic_all_b(in=a) f_induction;
+data tmplib3.TT_analytic_alls_b;
+merge TT_analytic_b(in=a) f_induction;
 by studyid_rev episode myepisode;
 if a; 
 induction = f_induction_comp_dt ne .;
@@ -1045,8 +957,8 @@ run;
 
 
 
-data data_bs;
-set tmplib1.TT_analytic_alls_b;
+data data_b1;
+set tmplib3.TT_analytic_alls_b;
 by studyid_rev episode myepisode;
 
 s_od_death=(od_death_dt ne .);
@@ -1066,101 +978,52 @@ run;
 
 
 
-data data_bs;
-set data_bs;
+
+data data_b2;
+set data_b1;
 by studyid_rev episode myepisode;
 where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "B" and predrug in ("B", "") and ddose_rev ne .;
 if trial_gap <= 14;
 run;
 
-data tmplib1.TT_analytic_rprev_sens_b;
-set data_bs;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
 
-data tmplib1.TT_analytic_rprev_sens_nw_b;
-set data_bs;
- if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
-
-
-data tmplib1.TT_analytic_prevSA_b;
-set data_bs;
+data tmplib3.TT_analytic_rprev_sens_nw_b;
+set data_b2;
  if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
 run;
 
 
 
 
-data data_b1;
-set tmplib1.TT_analytic_alls_b;
-by studyid_rev episode myepisode;
-
-s_od_death=(od_death_dt ne .);
-if od_death_dt > end_fu_dt then s_od_death = 0;
-if f_dt_oop ne . and f_dt_oop >= time0 and f_dt_oop < od_death_dt then s_od_death = 0;
-
-if s_od_death = 0 then do;
-   if f_dt_oop >= time0 then t_od_death = min(end_fu_dt, f_dt_oop) - time0;
-   else t_od_death = end_fu_dt - time0;
-end;
-else if s_od_death = 1 then t_od_death = od_death_dt-time0; 
-
-sens_od_death = s_od_death;
-time_od_death = min(t_od_death, 365); 
-if t_od_death >= 365 then sens_od_death = 0;
-run;
-
-
-data data_b1;
+data data_b3;
 set data_b1;
 by studyid_rev episode;
 where dt_start >= '01JAN2010'd and dt_start < '31DEC2022'd and drug_start = "B" and predrug in ("B", "") and ddose_rev ne .;
 if first.episode and trial_gap <= 14;
 run;
 
-data tmplib1.TT_analytic_prev_sens_b;
-set data_b1;
- if gap30_eli=1 and age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
-run;
 
-
-data tmplib1.TT_analytic_incid_sens_b;
-set tmplib1.TT_analytic_prev_sens_b;
-if episode = 1;
-run;
-
-
-data tmplib1.TT_analytic_prev_sens_nw_b;
-set data_b1;
+data tmplib3.TT_analytic_prev_sens_nw_b;
+set data_b3;
  if age_eli=1 and palli_excl=0 and canc_excl=0 and preg_eli=0 and incar_grp_bl ne '2_current';
 run;
 
 
-data tmplib1.TT_analytic_incid_sens_nw_b;
-set tmplib1.TT_analytic_prev_sens_nw_b;
+data tmplib3.TT_analytic_incid_sens_nw_b;
+set tmplib3.TT_analytic_prev_sens_nw_b;
 if episode = 1;
 run;
 
-
-
-proc freq data=tmplib1.TT_analytic_rprev_sens_nw_b;
-  table trial_cat;
- run;
-
-proc freq data=tmplib1.TT_analytic_prev_nw_b;
+proc freq data=tmplib3.TT_analytic_prev_sens_nw_b;
   table trial_cat;
  run;
 
 
-
-
- 
  
 proc sql;
-create table tmplib1.TT_analytic_prev_cl_sens_nw_b as
+create table tmplib3.TT_analytic_prev_cl_sens_nw_b as
 select a.*, b.com, b.comsize, b.n_pracs, b.n_pats 
-from tmplib1.TT_analytic_prev_sens_nw_b a left join der.prov_clinics_v2 b
+from tmplib3.TT_analytic_prev_sens_nw_b a left join der.prov_clinics_v2 b
 on year(a.time0)=b.year and month(a.time0)=b.month and a.prac_studyid_rev=b.prac_studyid_rev
 order by a.studyid_rev, a.time0;
 quit; 

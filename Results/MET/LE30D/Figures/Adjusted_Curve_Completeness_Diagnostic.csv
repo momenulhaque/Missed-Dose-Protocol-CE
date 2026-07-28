@@ -1,0 +1,33 @@
+trt_label,panel,n_rows,n_horizons,minimum_horizon,maximum_horizon,missing_risk,maximum_risk,selected_y_max,exceeds_axis
+No dose change,"OD: 3-4 days, within 30 days",27,27,0,365,0,0.10081731265114935,0.25,FALSE
+<50% reduction,"OD: 3-4 days, within 30 days",27,27,0,365,0,0.09818319946906295,0.25,FALSE
+≥50% reduction/≤40mg,"OD: 3-4 days, within 30 days",27,27,0,365,0,0.08189176404386522,0.25,FALSE
+Dose increase,"OD: 3-4 days, within 30 days",27,27,0,365,0,0.06286065941335073,0.25,FALSE
+No dose change,"OD: 3-4 days, after 30 days",27,27,0,365,0,0.036071186195440696,0.25,FALSE
+<50% reduction,"OD: 3-4 days, after 30 days",27,27,0,365,0,0.04033505417016314,0.25,FALSE
+≥50% reduction/≤40mg,"OD: 3-4 days, after 30 days",27,27,0,365,0,0.04110312814314687,0.25,FALSE
+Dose increase,"OD: 3-4 days, after 30 days",27,27,0,365,0,0.034544125228693434,0.25,FALSE
+No dose change,"OD: 5-14 days, within 30 days",27,27,0,365,0,0.10952922337698101,0.25,FALSE
+<50% reduction,"OD: 5-14 days, within 30 days",27,27,0,365,0,0.1328488154776437,0.25,FALSE
+≥50% reduction/≤40mg,"OD: 5-14 days, within 30 days",27,27,0,365,0,0.1474342312878305,0.25,FALSE
+Dose increase,"OD: 5-14 days, within 30 days",27,27,0,365,0,0.09188983942987106,0.25,FALSE
+No dose change,"OD: 5-14 days, after 30 days",27,27,0,365,0,0.037135085783673194,0.25,FALSE
+<50% reduction,"OD: 5-14 days, after 30 days",27,27,0,365,0,0.04236835611947354,0.25,FALSE
+≥50% reduction/≤40mg,"OD: 5-14 days, after 30 days",27,27,0,365,0,0.07944382551703122,0.25,FALSE
+Dose increase,"OD: 5-14 days, after 30 days",27,27,0,365,0,0.025467935224039895,0.25,FALSE
+No dose change,"DIS: 3-4 days, within 30 days",27,27,0,365,0,0.552623861563978,0.6,FALSE
+<50% reduction,"DIS: 3-4 days, within 30 days",27,27,0,365,0,0.49259568439271173,0.6,FALSE
+≥50% reduction/≤40mg,"DIS: 3-4 days, within 30 days",27,27,0,365,0,0.591799193507258,0.6,FALSE
+Dose increase,"DIS: 3-4 days, within 30 days",27,27,0,365,0,0.5015770434755737,0.6,FALSE
+No dose change,"DIS: 3-4 days, after 30 days",27,27,0,365,0,0.3586660542883717,0.6,FALSE
+<50% reduction,"DIS: 3-4 days, after 30 days",27,27,0,365,0,0.3903929685893335,0.6,FALSE
+≥50% reduction/≤40mg,"DIS: 3-4 days, after 30 days",27,27,0,365,0,0.4120751713136971,0.6,FALSE
+Dose increase,"DIS: 3-4 days, after 30 days",27,27,0,365,0,0.37838860358055426,0.6,FALSE
+No dose change,"DIS: 5-14 days, within 30 days",27,27,0,365,0,0.5787843383656526,0.6,FALSE
+<50% reduction,"DIS: 5-14 days, within 30 days",27,27,0,365,0,0.5894960658214989,0.6,FALSE
+≥50% reduction/≤40mg,"DIS: 5-14 days, within 30 days",27,27,0,365,0,0.581615260766778,0.6,FALSE
+Dose increase,"DIS: 5-14 days, within 30 days",27,27,0,365,0,0.546597106153767,0.6,FALSE
+No dose change,"DIS: 5-14 days, after 30 days",27,27,0,365,0,0.4068308887615021,0.6,FALSE
+<50% reduction,"DIS: 5-14 days, after 30 days",27,27,0,365,0,0.4674075050998333,0.6,FALSE
+≥50% reduction/≤40mg,"DIS: 5-14 days, after 30 days",27,27,0,365,0,0.5140580441126225,0.6,FALSE
+Dose increase,"DIS: 5-14 days, after 30 days",27,27,0,365,0,0.388251212929113,0.6,FALSE
