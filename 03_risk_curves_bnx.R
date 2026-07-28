@@ -152,11 +152,11 @@ df_od_tr4 <- prep_adj_curve(risk_tr4$all$od$curve)
 df_od_tr5 <- prep_adj_curve(risk_tr5$all$od$curve)
 
 # Generate the updated Overdose plots
-p_od_tr4  <- plot_adj_curve(df_od_tr4, y_max = 0.7, show_30d_line = TRUE,
+p_od_tr4  <- plot_adj_curve(df_od_tr4, y_max = 0.6, show_30d_line = TRUE,
                             y_lab = "Adjusted 1-month risk (%)")
 t_od_tr4  <- build_at_risk_table(dat_tr4_all, "time_od_acute")
 
-p_od_tr5  <- plot_adj_curve(df_od_tr5, y_max = 0.7, show_30d_line = TRUE,
+p_od_tr5  <- plot_adj_curve(df_od_tr5, y_max = 0.6, show_30d_line = TRUE,
                             y_lab = "Adjusted 1-month risk (%)")
 t_od_tr5  <- build_at_risk_table(dat_tr5_all, "time_od_acute")
 
@@ -188,11 +188,11 @@ df_dis_tr5 <- prep_adj_curve(risk_tr5$all$dis$curve)
 
 
 
-p_dis_tr4  <- plot_adj_curve(df_dis_tr4, y_max = 0.7, show_30d_line = FALSE,
+p_dis_tr4  <- plot_adj_curve(df_dis_tr4, y_max = 0.6, show_30d_line = FALSE,
                              y_lab = "Adjusted 12-month risk (%)")
 t_dis_tr4  <- build_at_risk_table(dat_tr4_all, "time_discont")
 
-p_dis_tr5  <- plot_adj_curve(df_dis_tr5, y_max = 0.7, show_30d_line = FALSE,
+p_dis_tr5  <- plot_adj_curve(df_dis_tr5, y_max = 0.6, show_30d_line = FALSE,
                              y_lab = "Adjusted 12-month risk (%)")
 t_dis_tr5  <- build_at_risk_table(dat_tr5_all, "time_discont")
 
@@ -214,3 +214,58 @@ print(dis_composite_tr5)
 dev.off()
 
 
+# COMBINE #######
+## od ############
+t_od_tr4_clean <- t_od_tr4 + labs(title = "Number of episode at risk during follow-up")
+t_od_tr5_clean <- t_od_tr5 + labs(title = NULL) + theme(axis.text.y = element_blank())
+
+
+p_od_tr4_lab <- p_od_tr4 +
+  labs(title = "A. Interruption of 3-5 days", x = "Days since time zero\n", 
+       y = "Adjusted risk (%)") +
+  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+
+p_od_tr5_lab <- p_od_tr5 +
+  labs(title = "B. Interruption of 6-14 days", x = "Days since time zero\n", 
+       y = "Adjusted risk (%)") +
+  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+
+col_od_tr4 <- p_od_tr4_lab / t_od_tr4_clean + plot_layout(heights = c(5, 1.2))
+col_od_tr5 <- p_od_tr5_lab / t_od_tr5_clean + plot_layout(heights = c(5, 1.2))
+
+combined_od <- (col_od_tr4 | col_od_tr5) / dummy_leg +
+  plot_layout(heights = c(10, 0.6))
+
+
+jpeg(paste0(RES_DIR, "Figures/Adjusted_Risk_OD_Line_Combined.jpg"),
+     width = 4800, height = 2400, res = 300)
+print(combined_od)
+dev.off()
+
+
+## dis ######
+t_dis_tr4_clean <- t_dis_tr4 + labs(title = "Number of episode at risk during follow-up")
+t_dis_tr5_clean <- t_dis_tr5 + labs(title = NULL) + theme(axis.text.y = element_blank())
+
+
+p_dis_tr4_lab <- p_dis_tr4 +
+  labs(title = "A. Interruption of 3-5 days", x = "Days since time zero\n", 
+       y = "Adjusted risk (%)") +
+  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+
+p_dis_tr5_lab <- p_dis_tr5 +
+  labs(title = "B. Interruption of 6-14 days", x = "Days since time zero\n", 
+       y = "Adjusted risk (%)") +
+  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+
+col_dis_tr4 <- p_dis_tr4_lab / t_dis_tr4_clean + plot_layout(heights = c(5, 1.2))
+col_dis_tr5 <- p_dis_tr5_lab / t_dis_tr5_clean + plot_layout(heights = c(5, 1.2))
+
+combined_dis <- (col_dis_tr4 | col_dis_tr5) / dummy_leg +
+  plot_layout(heights = c(10, 0.6))
+
+
+jpeg(paste0(RES_DIR, "Figures/Adjusted_Risk_dis_Line_Combined.jpg"),
+     width = 4800, height = 2400, res = 300)
+print(combined_dis)
+dev.off()
