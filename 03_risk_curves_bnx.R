@@ -96,7 +96,7 @@ build_at_risk_table <- function(dat, time_var) {
               size = 4.5, color = "black") +
     scale_x_continuous(limits = c(0, 365), breaks = breaks_x) +
     labs(x = NULL, y = NULL, title = "Episodes at risk") +
-    theme_minimal(base_size = 14) +
+    theme_minimal(base_size = 15) +
     theme(
       panel.grid   = element_blank(),
       axis.line    = element_blank(),
@@ -104,8 +104,8 @@ build_at_risk_table <- function(dat, time_var) {
       axis.text.x  = element_blank(),
       axis.title.y = element_blank(),
       # Apply the dynamic bolding to the y-axis text
-      axis.text.y  = element_text(color = "black", size = 12, face = y_face),
-      plot.title   = element_text(size = 12, face = "bold", hjust = -0.05),
+      axis.text.y  = element_text(color = "black", size = 15, face = y_face),
+      plot.title   = element_text(size = 15, face = "bold", hjust = -0.05),
       plot.margin  = ggplot2::margin(t = 0, r = 5, b = 5, l = 5, unit = "pt")
     )
 }
@@ -120,13 +120,14 @@ plot_adj_curve <- function(df, y_max, show_30d_line = TRUE, y_lab="Adjusted Cumu
     scale_x_continuous(limits = c(0, 365), breaks = c(0, 30, 90, 180, 270, 365)) +
     scale_color_manual(values = trt_colors_km) +
     labs(title = NULL, x = "Days since time zero\n", y = y_lab) +
-    theme_minimal(base_size = 14) +
+    theme_minimal(base_size = 15) +
     theme(
       panel.grid.minor  = element_blank(),
       axis.line         = element_line(color = "black"),
       axis.ticks        = element_line(color = "black", linewidth = 0.8),
       axis.ticks.length = unit(0.2, "cm"),
-      axis.text         = element_text(color = "black", size = 13),
+      axis.text         = element_text(color = "black", size = 15),
+      axis.title        = element_text(color = "black", size = 15, face = "bold"),
       legend.position   = "none",
       plot.margin       = ggplot2::margin(t = 10, r = 5, b = 0, l = 5, unit = "pt") 
     )
@@ -153,11 +154,11 @@ df_od_tr5 <- prep_adj_curve(risk_tr5$all$od$curve)
 
 # Generate the updated Overdose plots
 p_od_tr4  <- plot_adj_curve(df_od_tr4, y_max = 0.6, show_30d_line = TRUE,
-                            y_lab = "Adjusted 1-month risk (%)")
+                            y_lab = "Adjusted risk (%)")
 t_od_tr4  <- build_at_risk_table(dat_tr4_all, "time_od_acute")
 
 p_od_tr5  <- plot_adj_curve(df_od_tr5, y_max = 0.6, show_30d_line = TRUE,
-                            y_lab = "Adjusted 1-month risk (%)")
+                            y_lab = "Adjusted risk (%)")
 t_od_tr5  <- build_at_risk_table(dat_tr5_all, "time_od_acute")
 
 dummy_leg <- get_legend(p_od_tr4 + theme(legend.position = "bottom", legend.title = element_blank(), 
@@ -189,11 +190,11 @@ df_dis_tr5 <- prep_adj_curve(risk_tr5$all$dis$curve)
 
 
 p_dis_tr4  <- plot_adj_curve(df_dis_tr4, y_max = 0.6, show_30d_line = FALSE,
-                             y_lab = "Adjusted 12-month risk (%)")
+                             y_lab = "Adjusted risk (%)")
 t_dis_tr4  <- build_at_risk_table(dat_tr4_all, "time_discont")
 
 p_dis_tr5  <- plot_adj_curve(df_dis_tr5, y_max = 0.6, show_30d_line = FALSE,
-                             y_lab = "Adjusted 12-month risk (%)")
+                             y_lab = "Adjusted risk (%)")
 t_dis_tr5  <- build_at_risk_table(dat_tr5_all, "time_discont")
 
 # Assemble Discont
@@ -221,14 +222,14 @@ t_od_tr5_clean <- t_od_tr5 + labs(title = NULL) + theme(axis.text.y = element_bl
 
 
 p_od_tr4_lab <- p_od_tr4 +
-  labs(title = "A. Interruption of 3-5 days", x = "Days since time zero\n", 
+  labs(title = "Interruption of 3-5 days", x = "Days since time zero\n", 
        y = "Adjusted risk (%)") +
-  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+  theme(plot.title = element_text(face = "bold", size = 17, hjust = 0))
 
 p_od_tr5_lab <- p_od_tr5 +
-  labs(title = "B. Interruption of 6-14 days", x = "Days since time zero\n", 
-       y = "Adjusted risk (%)") +
-  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+  labs(title = "Interruption of 6-14 days", x = "Days since time zero\n", 
+       y = NULL) +
+  theme(plot.title = element_text(face = "bold", size = 17, hjust = 0))
 
 col_od_tr4 <- p_od_tr4_lab / t_od_tr4_clean + plot_layout(heights = c(5, 1.2))
 col_od_tr5 <- p_od_tr5_lab / t_od_tr5_clean + plot_layout(heights = c(5, 1.2))
@@ -249,14 +250,14 @@ t_dis_tr5_clean <- t_dis_tr5 + labs(title = NULL) + theme(axis.text.y = element_
 
 
 p_dis_tr4_lab <- p_dis_tr4 +
-  labs(title = "A. Interruption of 3-5 days", x = "Days since time zero\n", 
+  labs(title = "Interruption of 3-5 days", x = "Days since time zero\n", 
        y = "Adjusted risk (%)") +
-  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+  theme(plot.title = element_text(face = "bold", size = 17, hjust = 0))
 
 p_dis_tr5_lab <- p_dis_tr5 +
-  labs(title = "B. Interruption of 6-14 days", x = "Days since time zero\n", 
-       y = "Adjusted risk (%)") +
-  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0))
+  labs(title = "Interruption of 6-14 days", x = "Days since time zero\n", 
+       y = NULL) +
+  theme(plot.title = element_text(face = "bold", size = 17, hjust = 0))
 
 col_dis_tr4 <- p_dis_tr4_lab / t_dis_tr4_clean + plot_layout(heights = c(5, 1.2))
 col_dis_tr5 <- p_dis_tr5_lab / t_dis_tr5_clean + plot_layout(heights = c(5, 1.2))
