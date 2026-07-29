@@ -136,7 +136,7 @@ plot_adj_curve <- function(df, y_max, show_30d_line = TRUE, y_lab="Adjusted Cumu
     p <- p + geom_vline(xintercept = 30, linetype = "dashed", color = "gray60", linewidth = 0.8)
   }
   
-  if (y_max <= 0.20) {
+  if (y_max <= 0.25) {
     p <- p + scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
                                 limits = c(0, y_max), breaks = seq(0, y_max, 0.05))
   } else {
@@ -153,11 +153,11 @@ df_od_tr4 <- prep_adj_curve(risk_tr4$all$od$curve)
 df_od_tr5 <- prep_adj_curve(risk_tr5$all$od$curve)
 
 # Generate the updated Overdose plots
-p_od_tr4  <- plot_adj_curve(df_od_tr4, y_max = 0.6, show_30d_line = TRUE,
+p_od_tr4  <- plot_adj_curve(df_od_tr4, y_max = 0.25, show_30d_line = TRUE,
                             y_lab = "Adjusted risk (%)")
 t_od_tr4  <- build_at_risk_table(dat_tr4_all, "time_od_acute")
 
-p_od_tr5  <- plot_adj_curve(df_od_tr5, y_max = 0.6, show_30d_line = TRUE,
+p_od_tr5  <- plot_adj_curve(df_od_tr5, y_max = 0.25, show_30d_line = TRUE,
                             y_lab = "Adjusted risk (%)")
 t_od_tr5  <- build_at_risk_table(dat_tr5_all, "time_od_acute")
 

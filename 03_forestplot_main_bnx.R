@@ -194,7 +194,7 @@ p_4a_final <- add_grob(p_4a, row = nrow(plot_data_4a) + 2, col = 1:2, order = "b
                        x = unit(0, "npc"), y = unit(1, "npc"))
 
 
-jpeg(paste0(RES_DIR, "Figures/", "Figure2_OD_RD.jpg"), width = 5000, height = 1800, res = 400)
+jpeg(paste0(RES_DIR, "Figures/", "Figure2_OD_RD.jpg"), width = 5000, height = 1700, res = 400)
 p_4a_final
 dev.off()
 
@@ -270,6 +270,6 @@ p_4b_final <- add_grob(p_4b, row = nrow(plot_data_4b) + 2, col = 1:2, order = "b
 
 
 
-jpeg(paste0(RES_DIR, "Figures/", "Figure3_Discont_RD.jpg"), width = 5200, height = 1800, res = 400)
+jpeg(paste0(RES_DIR, "Figures/", "Figure3_Discont_RD.jpg"), width = 5200, height = 1700, res = 400)
 p_4b_final
 dev.off()

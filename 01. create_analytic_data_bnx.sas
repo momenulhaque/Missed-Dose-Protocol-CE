@@ -540,44 +540,16 @@ group by w.studyid_rev, w.episode, w.myepisode, w.time0;
 quit;
 
 
-/* 0. Reference day (same anchor as carry_status) */
-data cohort_ref;
-   set tmplib2.TT_cohort_b;
-   ref_date  = time0 - gap_days - 1;   /* last covered day before the gap   */
-   int_start = time0 - gap_days;       /* first day of the interruption      */
-   int_end   = time0 - 1;              /* last day of the interruption       */
-   format ref_date int_start int_end date9.;
-run;
-
 proc sql;
-create table carry_expanded as
-select  e.studyid_rev, e.episode, e.time0, e.gap_days,
-        e.int_start, e.int_end,
-        c.dt2, c.newdays
-from cohort_ref as e
-left join der.days_b
-        (where=(dt2 = dt and newdays >= 3 and dt2 >= '01JAN2010'd)) as c
-   on   e.studyid_rev = c.studyid_rev
-   and  c.dt2 + c.newdays - 1 >= e.int_start   
-   and  c.dt2                 <= e.int_end     
-;
-quit;
-
-data carry_days_row;
-   set carry_expanded;
-   if missing(dt2) then cov_days = 0;
-   else cov_days = max(0,
-        min(dt2 + newdays - 1, int_end) - int_start + 1);
-run;
-
-proc sql;
-create table cohort_carrydays as
-select  studyid_rev, episode, time0, gap_days,
-        max(cov_days)          as carry_days,         
-        (max(cov_days) > 0)    as carry_status         
-from carry_days_row
-group by studyid_rev, episode, time0, gap_days
-;
+create table weekly_carry as
+select e.studyid_rev, e.episode, e.myepisode, e.time0, max(c.dt2 ne .) as l_carry, max(c.newdays ne .) as l_carry_days
+from tmplib2.TT_cohort_b as e  
+left join der.days_b(where=(dt2=dt and newdays >= 3 and dt2 >= '01JAN2010'd)) as c
+on e.studyid_rev=c.studyid_rev and (
+e.time0-e.gap_days-7 <= dt2 <= e.time0-e.gap_days-1 or
+e.time0-e.gap_days-7 <= dt2+newdays-1 <= e.time0-e.gap_days-1 or
+(dt2<= e.time0-e.gap_days-7 and e.time0-e.gap_days-1<=dt2+newdays-1)) 
+group by e.studyid_rev, e.episode, e.myepisode, e.time0;
 quit;
 
 

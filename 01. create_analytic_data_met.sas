@@ -447,9 +447,10 @@ proc sql;
 create table pss_time0 as
 select e.studyid_rev, e.episode, e.myepisode, e.time0, p.dt2 ne . as pss
 from tmplib2.TT_cohort_m as e left join pss.Pss_opioid_epi_days as p
-on e.studyid_rev=p.studyid_rev and e.time0= p.dt2 
+on e.studyid_rev=p.studyid_rev and e.time0-30<= p.dt2 < e.time0 
 order by e.studyid_rev, e.episode, e.myepisode;
 quit;
+
 
 
 
