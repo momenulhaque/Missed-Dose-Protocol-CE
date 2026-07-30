@@ -77,7 +77,7 @@ build_event_table <- function(dat, time_var = "time_od_acute", event_var = "sens
   ggplot(table_df, aes(x = time, y = trt_label, label = label_text)) +
     geom_text(size = 4.5, color = "black") +
     scale_x_continuous(limits = c(0, 365), breaks = breaks_x) +
-    labs(x = NULL, y = NULL, title = "Risk table") + 
+    labs(x = NULL, y = NULL, title = "Number of events/episodes during follow-up") + 
     theme_minimal(base_size = 14) +
     theme(
       panel.grid   = element_blank(), axis.line = element_blank(), axis.ticks = element_blank(),
