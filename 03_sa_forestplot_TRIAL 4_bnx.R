@@ -17,7 +17,7 @@ sa_manifest_od <- tibble::tribble(
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr4_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr4_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr4_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr4_SA11_CumOAT_GE1yr.rds",
   "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr4_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr4_SA13_30dWashout.rds",
-
+  
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr4_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr4_SA10_PostFentEra.rds",
   
   "3. Exposure classification", "5 category dose\nadjustment", "standard", "Sensitivities/Risk/risk_tr4_5cat_od.rds", "Sensitivities/ps_weight_tr4_5cat.rds",
@@ -30,7 +30,8 @@ sa_manifest_od <- tibble::tribble(
   "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr4_hdPS.rds", "PScore/ps_weight_tr4_hdPS.rds",  
   "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr4_hdPS_ML.rds", "PScore/ps_weight_tr4_hdPS_ML.rds",
   "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr4_rmst_ow.rds", "PScore/ps_weight_tr4_all.rds",
-  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr4_rmst_cl.rds", "PScore/ps_weight_tr4_all_cl.rds"
+  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr4_rmst_cl.rds", "PScore/ps_weight_tr4_all_cl.rds",
+  "6. Model specification", "PS model with additional\ntake-home dose related\ncovariate ", "standard", "Risk/risk_tr4_carry.rds", "PScore/ps_weight_tr4_carry.rds"
   
 )
 
@@ -46,7 +47,7 @@ sa_manifest_dis <- tibble::tribble(
   "1. Sample restriction", "Restricted to high\nfentanyl area", "standard", "Sensitivities/Risk/risk_tr4_SA09_HighFentArea.rds", "Sensitivities/ps_wt_tr4_SA09_HighFentArea.rds",
   "1. Sample restriction", "1-year or longer\ncumulative OAT", "standard", "Sensitivities/Risk/risk_tr4_SA11_CumOAT_GE1yr.rds", "Sensitivities/ps_wt_tr4_SA11_CumOAT_GE1yr.rds",
   "1. Sample restriction", "30 days of no OAT\ndispensation before initiation", "standard", "Sensitivities/Risk/risk_tr4_SA13_30dWashout.rds", "Sensitivities/ps_wt_tr4_SA13_30dWashout.rds",    
-
+  
   
   "2. Timeline restriction", "Restricted to post-fentanyl\nera (\u2265 04/01/2012)", "standard", "Sensitivities/Risk/risk_tr4_SA10_PostFentEra.rds", "Sensitivities/ps_wt_tr4_SA10_PostFentEra.rds",
   
@@ -61,7 +62,8 @@ sa_manifest_dis <- tibble::tribble(
   "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr4_hdPS.rds", "PScore/ps_weight_tr4_hdPS.rds",  
   "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr4_hdPS_ML.rds", "PScore/ps_weight_tr4_hdPS_ML.rds",
   "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr4_rmst_ow.rds", "PScore/ps_weight_tr4_all.rds",
-  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr4_rmst_cl.rds", "PScore/ps_weight_tr4_all_cl.rds"
+  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr4_rmst_cl.rds", "PScore/ps_weight_tr4_all_cl.rds",
+  "6. Model specification", "PS model with additional\ntake-home dose related\ncovariate ", "standard", "Risk/risk_tr4_carry.rds", "PScore/ps_weight_tr4_carry.rds"
   
 )
 
@@ -233,12 +235,13 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   df_with_headers <- df_with_headers %>%
     select(is_header, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, `Plot_Canvas`, bg_color)
   
-  names(df_with_headers)[names(df_with_headers) == "SA_Col"] <- "Sensitivity Analysis"
-  names(df_with_headers)[names(df_with_headers) == "Dose_Adj"] <- "Dose adjustment"
-  names(df_with_headers)[names(df_with_headers) == "Episode"] <- "Episodes at risk\nat reinitiation"
+  names(df_with_headers)[names(df_with_headers) == "SA_Col"]        <- "Sensitivity Analysis"
+  names(df_with_headers)[names(df_with_headers) == "Dose_Adj"]      <- "Dose adjustment"
+  names(df_with_headers)[names(df_with_headers) == "Episode"]       <- "Episodes at risk\nat reinitiation"
   names(df_with_headers)[names(df_with_headers) == "abs_risk_disp"] <- risk_col_name
-  names(df_with_headers)[names(df_with_headers) == "rd_disp"] <- "Risk Difference (%)\n(95% CI)"
-  names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- " " 
+  if(outcome == "od") names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- "% difference in 1-month risk (95% CI)"
+  if(outcome == "dis") names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- "% difference in 12-month risk (95% CI)"
+  names(df_with_headers)[names(df_with_headers) == "rd_disp"]   <- " "
   
   return(df_with_headers)
 }
@@ -255,11 +258,13 @@ risk_col_od <- "% risk at 1 month\n(95% CI)"
 header_idx_od <- which(plot_data_od$is_header)
 
 p_od <- forest(
-  plot_data_od[, c("Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_od, "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_od[, c("Sensitivity Analysis", "Dose adjustment",
+                   "Episodes at risk\nat reinitiation", risk_col_od,
+                   " ", "% difference in 1-month risk (95% CI)")],
   est = plot_data_od$rd_pct, lower = plot_data_od$lci_pct, upper = plot_data_od$uci_pct,
   ci_column = 6, 
-  vert_line = c(-3, -2, -1, 1, 2, 3),
-  ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
+  vert_line = c(-2, -1, 1, 2, 3),
+  ref_line = 0, xlim = c(-2.5, 3.5), ticks_at = c(-2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
   #  title = "Buprenorphine/naloxone interruption 3-5 Days: Adjusted risk differences at 1 month for overdose-related acute care visits\n",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
@@ -273,9 +278,11 @@ p_od <- forest(
 )
 
 p_od <- edit_plot(p_od, row = header_idx_od, gp = gpar(fontface = "bold"))
-# FIX: Using proper 'npc' units for center alignment
-p_od <- edit_plot(p_od, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 3, part = "body",   hjust = 0.5, x = unit(0.5, "npc"))
 p_od <- edit_plot(p_od, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 4, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_od <- edit_plot(p_od, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
 for(i in 1:nrow(plot_data_od)) {
   if(!plot_data_od$is_header[i] && !is.na(ci_col_od[i]) && ci_col_od[i] != "black") {
@@ -284,7 +291,7 @@ for(i in 1:nrow(plot_data_od)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR4_OD.jpg"), width = 3500, height = 5500, res = 300)
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR4_OD.jpg"), width = 3500, height = 5700, res = 300)
 p_od
 dev.off()
 
@@ -302,11 +309,13 @@ risk_col_dis <- "% risk at 12 months\n(95% CI)"
 header_idx_dis <- which(plot_data_dis$is_header)
 
 p_dis <- forest(
-  plot_data_dis[, c("Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_dis, "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_dis[, c("Sensitivity Analysis", "Dose adjustment",
+                    "Episodes at risk\nat reinitiation", risk_col_dis,
+                    " ", "% difference in 12-month risk (95% CI)")],
   est = plot_data_dis$rd_pct, lower = plot_data_dis$lci_pct, upper = plot_data_dis$uci_pct,
   ci_column = 6, 
-  vert_line = c(-15, -10, -5, 5, 10, 15),
-  ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
+  vert_line = c(-10, -5, 5, 10, 15),
+  ref_line = 0, xlim = c(-10.5, 16), ticks_at = c(-10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
   # title = "Methadone interruption 3-4 Days: Adjusted risk differences at 12 Months for OAT discontinuation",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
@@ -320,9 +329,11 @@ p_dis <- forest(
 )
 
 p_dis <- edit_plot(p_dis, row = header_idx_dis, gp = gpar(fontface = "bold"))
-# FIX: Using proper 'npc' units for center alignment
-p_dis <- edit_plot(p_dis, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 3, part = "body",   hjust = 0.5, x = unit(0.5, "npc"))
 p_dis <- edit_plot(p_dis, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 4, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_dis <- edit_plot(p_dis, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
 for(i in 1:nrow(plot_data_dis)) {
   if(!plot_data_dis$is_header[i] && !is.na(ci_col_dis[i]) && ci_col_dis[i] != "black") {
@@ -331,7 +342,7 @@ for(i in 1:nrow(plot_data_dis)) {
 }
 
 
-jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR4_DIS.jpg"), width = 3500, height = 5300, res = 300)
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR4_DIS.jpg"), width = 3600, height = 5500, res = 300)
 p_dis
 dev.off()
 

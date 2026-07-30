@@ -542,16 +542,45 @@ quit;
 
 proc sql;
 create table weekly_carry as
-select e.studyid_rev, e.episode, e.myepisode, e.time0, max(c.dt2 ne .) as l_carry, max(c.newdays ne .) as l_carry_days
-from tmplib2.TT_cohort_b as e  
-left join der.days_b(where=(dt2=dt and newdays >= 3 and dt2 >= '01JAN2010'd)) as c
-on e.studyid_rev=c.studyid_rev and (
-e.time0-e.gap_days-7 <= dt2 <= e.time0-e.gap_days-1 or
-e.time0-e.gap_days-7 <= dt2+newdays-1 <= e.time0-e.gap_days-1 or
-(dt2<= e.time0-e.gap_days-7 and e.time0-e.gap_days-1<=dt2+newdays-1)) 
-group by e.studyid_rev, e.episode, e.myepisode, e.time0;
-quit;
+select
+    e.studyid_rev, e.episode, e.myepisode, e.time0, max(c.dt2 ne .) as l_carry,
+    max(case when 
+                    c.dt2 ne . then min( 
+                    c.dt2 + c.newdays - 1,
+                    e.time0 - e.gap_days - 1
+                )
+                -
+                max(
+                    c.dt2,
+                    e.time0 - e.gap_days - 7
+                )
+                + 1
+            else 0
+        end
+    ) as l_carry_days
 
+from tmplib2.TT_cohort_b as e
+
+left join der.days_b
+    (
+        where=(
+            dt2 = dt
+            and newdays >= 3
+            and dt2 >= '01JAN2010'd
+        )
+    ) as c
+
+    on e.studyid_rev = c.studyid_rev
+    and c.dt2 <= e.time0 - e.gap_days - 1
+    and c.dt2 + c.newdays - 1 >= e.time0 - e.gap_days - 7
+
+group by
+    e.studyid_rev,
+    e.episode,
+    e.myepisode,
+    e.time0
+;
+quit;
 
 
 /*proc sql;*/
@@ -604,7 +633,7 @@ proc freq data=TT_cohort_b; table cci/missing; run;
 
 data TT_cohort_b2;
 merge TT_cohort_b (in=a) past_month_udt past_homeless lha current_rural_status past_virtual_care prov2 pss_time0 
-past_comorb past_sed_psy past_opioid past_hosp past_hosp past_comorb2 cohort_carrydays;
+past_comorb past_sed_psy past_opioid past_hosp past_hosp past_comorb2 weekly_carry;
 by studyid_rev episode  time0;
 if udt=0 then do; poc_udt=0; lab_udt=0; end;
 if rural=. then rural=0;
