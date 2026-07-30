@@ -35,7 +35,8 @@ sa_manifest_od <- tibble::tribble(
   "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr5_hdPS.rds", "PScore/ps_weight_tr5_hdPS.rds",  
   "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr5_hdPS_ML.rds", "PScore/ps_weight_tr5_hdPS_ML.rds",
   "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr5_rmst_ow.rds", "PScore/ps_weight_tr5_all.rds",
-  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr5_rmst_cl.rds", "PScore/ps_weight_tr5_all_cl.rds"
+  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr5_rmst_cl.rds", "PScore/ps_weight_tr5_all_cl.rds",
+  "6. Model specification", "PS model with additional\ntake-home dose related\ncovariate ", "standard", "Risk/risk_tr5_carry.rds", "PScore/ps_weight_tr5_carry.rds"
 )
 
 sa_manifest_dis <- tibble::tribble(
@@ -68,7 +69,9 @@ sa_manifest_dis <- tibble::tribble(
   "6. Model specification", "High-dimensional propensity\nscore (hdPS)", "hdps", "Risk/risk_tr5_hdPS.rds", "PScore/ps_weight_tr5_hdPS.rds",  
   "6. Model specification", "hdPS with machine\nlearning algorithm", "hdps", "Risk/risk_tr5_hdPS_ML.rds", "PScore/ps_weight_tr5_hdPS_ML.rds",
   "6. Model specification", "Overlap weights\nbased analysis", "standard", "Risk/risk_tr5_rmst_ow.rds", "PScore/ps_weight_tr5_all.rds",
-  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr5_rmst_cl.rds", "PScore/ps_weight_tr5_all_cl.rds"
+  "6. Model specification", "PS model with additional\nprovider-level covariates", "standard", "Risk/risk_tr5_rmst_cl.rds", "PScore/ps_weight_tr5_all_cl.rds",
+  "6. Model specification", "PS model with additional\ntake-home dose related\ncovariate ", "standard", "Risk/risk_tr5_carry.rds", "PScore/ps_weight_tr5_carry.rds"
+  
 )
 
 trt_clean <- c(
@@ -234,12 +237,13 @@ build_wide_df <- function(manifest, outcome = "od", max_time = 30) {
   df_with_headers <- df_with_headers %>%
     select(is_header, SA_Col, Dose_Adj, Episode, abs_risk_disp, rd_disp, rd_pct, lci_pct, uci_pct, `Plot_Canvas`, bg_color)
   
-  names(df_with_headers)[names(df_with_headers) == "SA_Col"] <- "Sensitivity Analysis"
-  names(df_with_headers)[names(df_with_headers) == "Dose_Adj"] <- "Dose adjustment"
-  names(df_with_headers)[names(df_with_headers) == "Episode"] <- "Episodes at risk\nat reinitiation"
+  names(df_with_headers)[names(df_with_headers) == "SA_Col"]        <- "Sensitivity Analysis"
+  names(df_with_headers)[names(df_with_headers) == "Dose_Adj"]      <- "Dose adjustment"
+  names(df_with_headers)[names(df_with_headers) == "Episode"]       <- "Episodes at risk\nat reinitiation"
   names(df_with_headers)[names(df_with_headers) == "abs_risk_disp"] <- risk_col_name
-  names(df_with_headers)[names(df_with_headers) == "rd_disp"] <- "Risk Difference (%)\n(95% CI)"
-  names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- " " 
+  if(outcome == "od") names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- "% difference in 1-month risk (95% CI)"
+  if(outcome == "dis") names(df_with_headers)[names(df_with_headers) == "Plot_Canvas"] <- "% difference in 12-month risk (95% CI)"
+  names(df_with_headers)[names(df_with_headers) == "rd_disp"]   <- " "
   
   return(df_with_headers)
 }
@@ -256,11 +260,13 @@ risk_col_od <- "% risk at 1 month\n(95% CI)"
 header_idx_od <- which(plot_data_od$is_header)
 
 p_od <- forest(
-  plot_data_od[, c("Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_od, "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_od[, c("Sensitivity Analysis", "Dose adjustment",
+                   "Episodes at risk\nat reinitiation", risk_col_od,
+                   " ", "% difference in 1-month risk (95% CI)")],
   est = plot_data_od$rd_pct, lower = plot_data_od$lci_pct, upper = plot_data_od$uci_pct,
   ci_column = 6, 
-  vert_line = c(-3, -2, -1, 1, 2, 3),
-  ref_line = 0, xlim = c(-3.5, 3.5), ticks_at = c(-3, -2, -1, 0, 1, 2, 3),
+  vert_line = c(-2, -1, 1, 2, 3),
+  ref_line = 0, xlim = c(-2.5, 3.5), ticks_at = c(-2, -1, 0, 1, 2, 3),
   xlab = "Risk Difference (%)",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
@@ -273,8 +279,11 @@ p_od <- forest(
 )
 
 p_od <- edit_plot(p_od, row = header_idx_od, gp = gpar(fontface = "bold"))
-p_od <- edit_plot(p_od, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 3, part = "body",   hjust = 0.5, x = unit(0.5, "npc"))
 p_od <- edit_plot(p_od, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 4, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_od <- edit_plot(p_od, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_od <- edit_plot(p_od, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
 for(i in 1:nrow(plot_data_od)) {
   if(!plot_data_od$is_header[i] && !is.na(ci_col_od[i]) && ci_col_od[i] != "black") {
@@ -282,7 +291,7 @@ for(i in 1:nrow(plot_data_od)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/SA_Forest_tr5_OD.jpg"), width = 3550, height = 5900, res = 300)
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR5_OD.jpg"), width = 3550, height = 6200, res = 300)
 p_od
 dev.off()
 
@@ -300,11 +309,13 @@ risk_col_dis <- "% risk at 12 months\n(95% CI)"
 header_idx_dis <- which(plot_data_dis$is_header)
 
 p_dis <- forest(
-  plot_data_dis[, c("Sensitivity Analysis", "Dose adjustment", "Episodes at risk\nat reinitiation", risk_col_dis, "Risk Difference (%)\n(95% CI)", " ")],
+  plot_data_dis[, c("Sensitivity Analysis", "Dose adjustment",
+                    "Episodes at risk\nat reinitiation", risk_col_dis,
+                    " ", "% difference in 12-month risk (95% CI)")],
   est = plot_data_dis$rd_pct, lower = plot_data_dis$lci_pct, upper = plot_data_dis$uci_pct,
   ci_column = 6, 
-  vert_line = c(-15, -10, -5, 5, 10, 15),
-  ref_line = 0, xlim = c(-15.5, 15.5), ticks_at = c(-15, -10, -5, 0, 5, 10, 15),
+  vert_line = c(-10, -5, 5, 10, 15),
+  ref_line = 0, xlim = c(-10.5, 15.5), ticks_at = c(-10, -5, 0, 5, 10, 15),
   xlab = "Risk Difference (%)",
   theme = forest_theme(base_size = 12, ci_pch = 15, ci_col = "black", ci_fill = "black", ci_lwd = 1.8,
                        vertline_lty = "dotted",
@@ -317,8 +328,11 @@ p_dis <- forest(
 )
 
 p_dis <- edit_plot(p_dis, row = header_idx_dis, gp = gpar(fontface = "bold"))
-p_dis <- edit_plot(p_dis, col = 3, part = "body", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 3, part = "body",   hjust = 0.5, x = unit(0.5, "npc"))
 p_dis <- edit_plot(p_dis, col = 3, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 4, part = "header", hjust = 0.5, x = unit(0.5, "npc"))
+p_dis <- edit_plot(p_dis, col = 6, part = "body", hjust = 0, x = unit(.2, "npc"))
+p_dis <- edit_plot(p_dis, col = 6, part = "header", hjust = 0.5, x = unit(0.15, "npc"))
 
 for(i in 1:nrow(plot_data_dis)) {
   if(!plot_data_dis$is_header[i] && !is.na(ci_col_dis[i]) && ci_col_dis[i] != "black") {
@@ -326,6 +340,6 @@ for(i in 1:nrow(plot_data_dis)) {
   }
 }
 
-jpeg(paste0(RES_DIR, "Figures/SA_Forest_tr5_DIS.jpg"), width = 3550, height = 5700, res = 300)
+jpeg(paste0(RES_DIR, "Figures/SA_Forest_TR5_DIS.jpg"), width = 3650, height = 5900, res = 300)
 p_dis
 dev.off()
