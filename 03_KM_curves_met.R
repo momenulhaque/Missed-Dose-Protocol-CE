@@ -316,6 +316,7 @@ dev.off()
 
 
 
+# OVERDOSE: LE30D vs GT30D #########
 
 
 library(tidyverse)
@@ -337,7 +338,6 @@ trt_colors_km <- c(
   "Dose increase" = "#D62728"                     
 )
 
-# OVERDOSE: LE30D vs GT30D #########
 
 #  UNADJUSTED OVERDOSE KM CURVES
 #  4 separate figures: TR2 × {LE30D, GT30D} and TR3 × {LE30D, GT30D}
@@ -445,7 +445,7 @@ plot_km_curve <- function(df) {
     scale_x_continuous(limits = c(0, 365),
                        breaks = c(0, 30, 90, 180, 270, 365)) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                       limits = c(0, 0.8)) +
+                       limits = c(0, 0.25)) +
     scale_color_manual(values = trt_colors_km) +
     labs(title = NULL,
          x = "Days since time zero\n",
