@@ -228,7 +228,7 @@ build_event_table_discont <- function(dat, time_var = "time_discont", event_var 
   ggplot(table_df, aes(x = time, y = trt_label, label = label_text)) +
     geom_text(size = 4.5, color = "black") +
     scale_x_continuous(limits = c(0, 365), breaks = breaks_x) +
-    labs(x = NULL, y = NULL, title = "Risk of discontinuations table") + 
+    labs(x = NULL, y = NULL, title = "Number of events/episodes during follow-up") + 
     theme_minimal(base_size = 14) +
     theme(
       panel.grid   = element_blank(),
