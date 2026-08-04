@@ -642,7 +642,7 @@ plot_km_curve <- function(df) {
     scale_x_continuous(limits = c(0, 365),
                        breaks = c(0, 30, 90, 180, 270, 365)) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                       limits = c(0, 0.8)) +
+                       limits = c(0, 1)) +
     scale_color_manual(values = trt_colors_km) +
     labs(title = NULL,
          x = "Days since time zero\n",
