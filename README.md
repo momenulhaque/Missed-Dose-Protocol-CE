@@ -19,7 +19,7 @@ To keep the two analyses organized within a single repository:
 
 - Scripts and files ending in **`_met`** belong to the **methadone paper**.
 - Scripts and files ending in **`_bnx`** belong to the **buprenorphine/naloxone paper**.
-- **Results are stored in separate folders** for each paper (e.g., a MET results folder and a BNX results folder), so outputs, figures, and tables do not overlap.
+- **Results are removed**
 - Shared helper functions and general pipeline scripts (where applicable) are used by both analyses.
 
 Each paper's specific documentation is provided in its own section below.
@@ -49,7 +49,7 @@ Momenul Haque Mondol, Jeong Eun Min, Michelle Zanette, Md. Belal Hossain, Megan 
 - `04_assessing_covariates_dist_met, 04_assessing_positivity_met_LE30D_TR2, 04_assessing_positivity_met_LE30D_TR3, and 04_sa_assessing overlap_met` — Some diagnostic plots.
 
 ### Results
-Stored in the **Results\>MET** folder
+Stored in the **Results\>MET** folder (deleted now)
 
 ---
 
@@ -75,7 +75,7 @@ Momenul Haque Mondol, Kiera Tsakonas, Jeong Eun Min, Michelle Zanette, Md. Belal
 - `04_assessing_covariates_dist_met, and 04_sa_assessing overlap_met` — Some diagnostic plots.
 - 
 ### Results
-Stored in the **Results>BNX** folder
+Stored in the **Results>BNX** folder (deleted now)
 
 ---
 
