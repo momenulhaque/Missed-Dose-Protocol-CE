@@ -1,5 +1,0 @@
-Cohort,Episodes,Unweighted_ESS,IPTW_ESS,Overlap_ESS,IPTW_weight_column,Overlap_weight_column
-"3-4 days, within 30 days",3691,3691,3049.9082592188925,888.5269701643922,wt_trunc,ow_wt
-"3-4 days, after 30 days",1153,1153,901.686406175873,447.79133141823434,wt_trunc,ow_wt
-"5-14 days, within 30 days",6909,6909,5003.837545346493,1669.4671964864642,wt_trunc,ow_wt
-"5-14 days, after 30 days",2419,2419,1823.3290072124098,1231.2505973352775,wt_trunc,ow_wt

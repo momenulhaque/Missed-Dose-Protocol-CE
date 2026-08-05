@@ -1,9 +1,0 @@
-trial,trt,RMST_LE30D,RMST_GT30D,cum12_pct_LE30D,cum12_pct_GT30D,RMST_diff_GT_minus_LE,Disc_diff_GT_minus_LE,,,,
-3-4 days,No dose change,128,261,81.9,45.5,133,-36.4,,,,
-3-4 days,<50% reduction,162,231,73.5,57,69,-16.5,,,53.35,77.15
-3-4 days,≥50% reduction/≤40mg,152,200,78,60,48,-18,,,,
-3-4 days,Dose increase,157,243,75.2,50.9,86,-24.3,,,,
-5-14 days,No dose change,126,241,82,54.1,115,-27.9,,,61.25,79.85
-5-14 days,<50% reduction,134,200,82.1,65.2,66,-16.9,,,,
-5-14 days,≥50% reduction/≤40mg,144,183,80.1,69.9,39,-10.2,,,,
-5-14 days,Dose increase,154,234,75.2,55.8,80,-19.4,,,,
