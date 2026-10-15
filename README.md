@@ -47,7 +47,7 @@ Momenul Haque Mondol, Jeong Eun Min, Michelle Zanette, Md. Belal Hossain, Megan 
 - `03_KM_curves_met, 03_risk_curves_met, and 03_RMST_bars_met` — Figures for KM estimates, risk, and restricted mean survival time respectively (R).
 - `03_sa_Table_TRIAL 2_met_LE30D, 03_sa_Table_TRIAL 2_met_GT30D, 03_sa_Table_TRIAL 3_met_LE30D, and 03_sa_Table_TRIAL 3_met_GT30D` — eTables for sensitivity analysis (R).
 - `04_assessing_covariates_dist_met, and 04_sa_assessing overlap_met` — Some diagnostic plots.
-- `generate_BC_health_neighbour_csv` — Prepare geographical clusters part 1.
+- `02_sa_cluster_analysis_part1, 02_sa_cluster_analysis_met_part2` — Code for clusters adjusted analysis.
 
 ### Results
 Stored in the **Results\>MET** folder (deleted now)
@@ -74,7 +74,7 @@ Momenul Haque Mondol, Kiera Tsakonas, Jeong Eun Min, Michelle Zanette, Md. Belal
 - `03_KM_curves_bnx, 03_risk_curves_bnx, and 03_RMST_bars_bnx` — Figures for KM estimates, risk, and restricted mean survival time respectively (R).
 - `03_sa_forestplot_TRIAL 4_bnx, and 03_sa_forestplot_TRIAL 5_bnx` — Forestplot for sensitivity analyses (R).
 - `04_assessing_covariates_dist_met, and 04_sa_assessing overlap_met` — Some diagnostic plots.
-- 
+- `02_sa_cluster_analysis_part1, 02_sa_cluster_analysis_bnx_part2` — Code for clusters adjusted analysis.
 ### Results
 Stored in the **Results>BNX** folder (deleted now)
 
