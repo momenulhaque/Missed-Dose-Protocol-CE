@@ -39,14 +39,15 @@ Momenul Haque Mondol, Jeong Eun Min, Michelle Zanette, Md. Belal Hossain, Megan 
 - `01. create_flow_chart_met_bnx` — cohort flow chart (SAS).
 - `02_prepare_hdPS_analysis` — prepare data for hdPS (SAS).
 - `00_functions` — helper functions (R).
-- `02_main_analysis_rmst_met` — primary analysis using propensity score weighting (R).
+- `02_main_analysis_rmst_met_LE30D, 02_main_analysis_rmst_met_GT30D` — primary analysis using propensity score weighting (R).
 - `03_Timing of interruptions_met` — exploring the timing of interruptions (R).
 - `02_sa_analysis_met_LE30D_1, 02_sa_analysis_met_LE30D_2, 02_sa_analysis_met_GT30D_1 and 02_sa_analysis_met_GT30D_2 ` — sensitivity analyses (R).
 - `02_Table1` — create Tables of baseline characteristics (R).
 - `03_forestplot_main_met` — create forestplot for primary results (R).
 - `03_KM_curves_met, 03_risk_curves_met, and 03_RMST_bars_met` — Figures for KM estimates, risk, and restricted mean survival time respectively (R).
-- `03_sa_forestplot_TRIAL 2_met_LE30D, 03_sa_forestplot_TRIAL 2_met_GT30D, 03_sa_forestplot_TRIAL 3_met_LE30D, and 03_sa_forestplot_TRIAL 3_met_GT30D` — Forestplot for sensitivity analysis (R).
-- `04_assessing_covariates_dist_met, 04_assessing_positivity_met_LE30D_TR2, 04_assessing_positivity_met_LE30D_TR3, and 04_sa_assessing overlap_met` — Some diagnostic plots.
+- `03_sa_Table_TRIAL 2_met_LE30D, 03_sa_Table_TRIAL 2_met_GT30D, 03_sa_Table_TRIAL 3_met_LE30D, and 03_sa_Table_TRIAL 3_met_GT30D` — eTables for sensitivity analysis (R).
+- `04_assessing_covariates_dist_met, and 04_sa_assessing overlap_met` — Some diagnostic plots.
+- `generate_BC_health_neighbour_csv` — Prepare geographical clusters part 1.
 
 ### Results
 Stored in the **Results\>MET** folder (deleted now)
