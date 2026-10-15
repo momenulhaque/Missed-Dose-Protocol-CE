@@ -466,20 +466,28 @@ dev.off()
 
 # 6. PS plots: LE30D vs GT30D ############
 
-
 library(tidyverse)
 library(nnet)
+library(ggpattern) # Required for pattern fills
 
-# 1. Define colors
+# 1. Define colors and patterns
 COMPARISON_COLORS <- c(
-  "No dose change"       = "#000000",
-  "Dose increase"        = "#D62728",
-  "<50% reduction"       = "#2CA02C",
-  "≥50% reduction/≤40mg" = "#FF7F0E"
+  "No dose change"       = alpha("#000000", 0.9),
+  "Dose increase"        = alpha("#A00000", 0.9), 
+  "<50% reduction"       = alpha("#2CA02C", 0.9), 
+  "≥50% reduction or ≤40mg" = alpha("#FF7F0E", 0.9)
+)
+
+
+COMPARISON_PATTERNS <- c(
+  "No dose change"       = "none",       # Just the outline
+  "Dose increase"        = "stripe",
+  "<50% reduction"       = "crosshatch",
+  "≥50% reduction or ≤40mg" = "circle"
 )
 
 # 2. Load PS model objects
-RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/" 
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocols-PRI/Results/MET/" 
 ps_tr2_le30d <- readRDS(paste0(RES_DIR, "LE30D/PScore/ps_weight_tr2_34d_all.rds"))$data_weights
 ps_tr2_gt30d <- readRDS(paste0(RES_DIR, "GT30D/PScore/ps_weight_tr2_34d_all.rds"))$data_weights
 
@@ -493,57 +501,70 @@ recode_ps <- function(dat, trial_label) {
       group = recode(trt,
                      "no reversion" = "No dose change",
                      "1-<50%"       = "<50% reduction",
-                     ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                     ">=50%/<=40mg" = "≥50% reduction or ≤40mg",
                      "increase"     = "Dose increase"
       ),
       group = factor(group, levels = c(
         "No dose change", "<50% reduction",
-        "≥50% reduction/≤40mg", "Dose increase"
+        "≥50% reduction or ≤40mg", "Dose increase"
       )),
       Trial = trial_label
     ) %>%
     select(group, ps, Trial)
 }
 
-tr2_le30d <- recode_ps(ps_tr2_le30d, "Methadone interruption of 3-4 days within 30 days of treatment")
-tr2_gt30d <- recode_ps(ps_tr2_gt30d, "Methadone interruption of 3-4 days after 30 days of treatment")
+tr2_le30d <- recode_ps(ps_tr2_le30d, "Methadone interruptions of 3-4 days,\nwithin 30 days of initiation")
+tr2_gt30d <- recode_ps(ps_tr2_gt30d, "Methadone interruptions of 3-4 days,\nafter 30 days of initiation")
 
-tr3_le30d <- recode_ps(ps_tr3_le30d, "Methadone interruption of 5-14 days within 30 days of treatment")
-tr3_gt30d <- recode_ps(ps_tr3_gt30d, "Methadone interruption of 5-14 days after 30 days of treatment")
+tr3_le30d <- recode_ps(ps_tr3_le30d, "Methadone interruptions of 5-14 days,\nwithin 30 days of initiation")
+tr3_gt30d <- recode_ps(ps_tr3_gt30d, "Methadone interruptions of 5-14 days,\nafter 30 days of initiation")
 
 
 dat_all <- bind_rows(tr2_le30d, tr2_gt30d, tr3_le30d, tr3_gt30d) %>% 
-  mutate(Trial = factor(Trial, levels = c("Methadone interruption of 3-4 days within 30 days of treatment",
-                                                      "Methadone interruption of 3-4 days after 30 days of treatment",
-                                                      "Methadone interruption of 5-14 days within 30 days of treatment",
-                                                      "Methadone interruption of 5-14 days after 30 days of treatment")))
+  mutate(Trial = factor(Trial, levels = c("Methadone interruptions of 3-4 days,\nwithin 30 days of initiation",
+                                          "Methadone interruptions of 3-4 days,\nafter 30 days of initiation",
+                                          "Methadone interruptions of 5-14 days,\nwithin 30 days of initiation",
+                                          "Methadone interruptions of 5-14 days,\nafter 30 days of initiation")))
 
-# 4. Plot function
+
+# 4. Plot function using ggpattern
 ps_score_plot_c3 <- function(dat,
                              x_lab = "Propensity Score",
                              y_lab = "Density",
                              legend_position = c(0.02, 0.02),
                              legend_justification = c(0, 0),
                              x_points = c(0, .25, .5, .75, 1)) {
-  ggplot(dat, aes(x = ps, colour = group, fill = group)) +
-    geom_histogram(aes(y = after_stat(density)),
-                   position = "identity", alpha = 0.2, bins = 30) +
-    geom_density(alpha = 0.05, linewidth = 0.5) +
-    scale_colour_manual(values = COMPARISON_COLORS) +
-    scale_fill_manual(values = COMPARISON_COLORS) +
+  ggplot(dat, aes(x = ps, color = group)) +
+    geom_histogram_pattern(
+      aes(
+        y = after_stat(density),
+        pattern = group,
+        pattern_color = group
+      ),
+      position = "identity",
+      fill = "transparent",      # Prevents overlapping fills from blending into a 5th color
+      bins = 30,
+      pattern_density = 0.05,    # Adjusts how tight the pattern is
+      pattern_spacing = 0.03,    # Adjusts space between pattern elements
+      pattern_angle = 45,
+      linewidth = 0.8
+    ) +
+    scale_color_manual(values = COMPARISON_COLORS) +
+    scale_pattern_color_manual(values = COMPARISON_COLORS) +
+    scale_pattern_manual(values = COMPARISON_PATTERNS) +
     facet_wrap(~Trial, nrow = 2, scales = "free") +
     labs(title = NULL, x = x_lab, y = y_lab) +
     scale_x_continuous(breaks = x_points) +
     theme_minimal(base_size = 13) +
     theme(
-      title            = element_text(color = "black", size = 14),
-      panel.grid       = element_blank(),
-      axis.line        = element_line(color = "black"),
-      axis.ticks.length = unit(0.2, "cm"),
-      axis.ticks.y     = element_line(linewidth = 1.2, color = "black"),
-      axis.ticks.x     = element_line(linewidth = 1.2, color = "black"),
-      axis.text        = element_text(color = "black", size = 14),
-      axis.title.y     = element_text(size = 14),
+      title                = element_text(color = "black", size = 14),
+      panel.grid           = element_blank(),
+      axis.line            = element_line(color = "black"),
+      axis.ticks.length    = unit(0.2, "cm"),
+      axis.ticks.y         = element_line(linewidth = 1.2, color = "black"),
+      axis.ticks.x         = element_line(linewidth = 1.2, color = "black"),
+      axis.text            = element_text(color = "black", size = 14),
+      axis.title.y         = element_text(size = 14),
       legend.position      = legend_position,
       legend.justification = legend_justification,
       legend.direction     = "horizontal",
@@ -551,6 +572,7 @@ ps_score_plot_c3 <- function(dat,
       legend.text          = element_text(size = 14, color = "black"),
       legend.background    = element_rect(fill = "white", color = "black"),
       legend.key           = element_blank(),
+      legend.key.size      = unit(1.2, "cm"), # Enlarged so patterns are visible in the legend
       strip.background     = element_rect(fill = "lightgray", color = NA),
       strip.text           = element_text(face = "bold", size = 13)
     )
@@ -558,10 +580,17 @@ ps_score_plot_c3 <- function(dat,
 
 # 5. Generate and save
 plot2 <- ps_score_plot_c3(dat_all, legend_position = "bottom") +
-  guides(color = guide_legend(nrow = 1))
+  guides(
+    color = guide_legend(nrow = 1),
+    pattern = guide_legend(nrow = 1),
+    pattern_color = guide_legend(nrow = 1)
+  )
 
 jpeg(paste0(RES_DIR, "LE30D/Figures/PS_plots.jpg"),
      width = 3800, height = 2500, res = 300)
 print(plot2)
+
+
 dev.off()
+
 

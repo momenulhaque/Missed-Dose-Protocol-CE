@@ -629,7 +629,7 @@ HORIZONS_CURVE <- c(seq(14, 357, by = 14), 365)
 HORIZONS_CI    <- sort(c(HORIZONS_CURVE, c(30, 60, 90, 180)))
 
 
-### met 3-4 days #########################
+### bnx 3-5 days #########################
 ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr4_carry.rds"))
 
 # Overdose
@@ -676,7 +676,7 @@ saveRDS(risk$tr4, paste0(RES_DIR, "Risk/", "risk_tr4_carry.rds"))
 cat("  ✓ Trial 2 risk estimates saved.\n")
 
 
-### met 5-14 days #########################
+### bnx 6-14 days #########################
 
 ps_fit <- readRDS(paste0(RES_DIR, "PScore/", "ps_weight_tr5_carry.rds"))
 

@@ -4,7 +4,7 @@ library(grid)
 
 # ── 1. SET PATHS AND LOAD DATA ────────────────────────────────────────────────
 # Pointing specifically to the LE30D subgroup results
-RES_DIR_LE30D <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/LE30D/"
+RES_DIR_LE30D <- "H:/GitHub/Missed-Dose-Protocols-PRI/Results/MET/LE30D/"
 
 risk_tr2_le30 <- readRDS(paste0(RES_DIR_LE30D, "Risk/risk_tr2.rds"))
 risk_tr3_le30 <- readRDS(paste0(RES_DIR_LE30D, "Risk/risk_tr3.rds"))
@@ -13,7 +13,7 @@ dat_tr2_le30 <- readRDS(paste0(RES_DIR_LE30D, "PScore/", "ps_weight_tr2_34d_all.
 dat_tr3_le30 <- readRDS(paste0(RES_DIR_LE30D, "PScore/", "ps_weight_tr3_all.rds"))
 
 
-RES_DIR_GT30D <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/MET/GT30D/"
+RES_DIR_GT30D <- "H:/GitHub/Missed-Dose-Protocols-PRI/Results/MET/GT30D/"
 
 risk_tr2_gt30 <- readRDS(paste0(RES_DIR_GT30D, "Risk/risk_tr2.rds"))
 risk_tr3_gt30 <- readRDS(paste0(RES_DIR_GT30D, "Risk/risk_tr3.rds"))
@@ -103,7 +103,7 @@ extract_rd_data <- function(risk_obj, dat_weights, max_time, outcome = "od",
 trt_colors <- c(
   "No dose change" = "black", 
   "<50% reduction" = "#2CA02C", 
-  "≥50% reduction/≤40mg" = "#FF7F0E", 
+  "≥50% reduction or ≤40mg" = "#FF7F0E", 
   "Dose increase" = "#D62728"
 )
 
@@ -122,7 +122,7 @@ plot_data_2a <- bind_rows(tr2_od_rd_le30, tr2_od_rd_gt30) %>%
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       ">=50%/<=40mg" = "≥50% reduction or ≤40mg",
                        "increase" = "Dose increase"),
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
@@ -155,7 +155,7 @@ plot_data_3a <- bind_rows(tr3_od_rd_le30, tr3_od_rd_gt30) %>%
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       ">=50%/<=40mg" = "≥50% reduction or ≤40mg",
                        "increase" = "Dose increase"),
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
@@ -234,7 +234,7 @@ plot_data_2b <- bind_rows(tr2_dis_rd_le30, tr2_dis_rd_gt30) %>%
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       ">=50%/<=40mg" = "≥50% reduction or ≤40mg",
                        "increase" = "Dose increase"),
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
@@ -267,7 +267,7 @@ plot_data_3b <- bind_rows(tr3_dis_rd_le30, tr3_dis_rd_gt30) %>%
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
-                       ">=50%/<=40mg" = "≥50% reduction/≤40mg",
+                       ">=50%/<=40mg" = "≥50% reduction or ≤40mg",
                        "increase" = "Dose increase"),
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
@@ -326,7 +326,7 @@ for(i in 1:nrow(plot_data_dis)) {
 #                        gp = gpar(fontsize = 11), hjust = 0, vjust = 1, halign = 0, valign = 1, 
 #                        x = unit(0, "npc"), y = unit(1, "npc"))
 
-jpeg(paste0(RES_DIR_LE30D, "Figures/Figure2_DIS_RD.jpg"), width = 5800, height = 2500, res = 400)
+jpeg(paste0(RES_DIR_LE30D, "Figures/Figure2_DIS_RD.jpg"), width = 5950, height = 2500, res = 400)
 p_2b
 dev.off()
 

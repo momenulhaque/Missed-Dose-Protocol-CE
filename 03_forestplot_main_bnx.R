@@ -11,7 +11,7 @@ library(tidyverse)
 
 
 
-RES_DIR <- "H:/GitHub/Missed-Dose-Protocol-CE/Results/BNX/"
+RES_DIR <- "H:/GitHub/Missed-Dose-Protocols-PRI/Results/BNX/"
 
 # UNIFIED EXTRACTION: Absolute Risk and Risk Difference at time t
 
@@ -115,7 +115,7 @@ extract_rd_data <- function(risk_obj, dat_weights, max_time, outcome = "od",
 trt_colors <- c(
   "No dose change" = "black", 
   "<50% reduction" = "#2CA02C", 
-  "≥50% reduction/≤4mg" = "#FF7F0E", 
+  "≥50% reduction or ≤4mg" = "#FF7F0E", 
   "Dose increase" = "#D62728"
 )
 
@@ -135,7 +135,7 @@ plot_data_4a <- bind_rows(tr4_od_rd, tr5_od_rd) %>%
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
-                       ">=50%/<=4mg" = "≥50% reduction/≤4mg",
+                       ">=50%/<=4mg" = "≥50% reduction or ≤4mg",
                        "increase" = "Dose increase"),
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
@@ -213,7 +213,7 @@ plot_data_4b <- bind_rows(tr4_dis_rd, tr5_dis_rd) %>%
     trt_group = recode(trt_group,
                        "no reversion" = "No dose change",
                        "1-<50%" = "<50% reduction",
-                       ">=50%/<=4mg" = "≥50% reduction/≤4mg",
+                       ">=50%/<=4mg" = "≥50% reduction or ≤4mg",
                        "increase" = "Dose increase"),
     rd_pct = ifelse(trt_group == "No dose change", NA, rd_pct),
     rd_lower_pct = ifelse(trt_group == "No dose change", NA, rd_lower_pct),
